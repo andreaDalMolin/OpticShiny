@@ -194,7 +194,7 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
     # Add to surge periods data frame
     if(length(surge_hours) > 0) {
       for(i in surge_hours) {
-        surge_periods <- rbind(surge_periods, data.frame(Start = i - minutes(30), End = i + minutes(30), Filter = val))
+        surge_periods <- rbind(surge_periods, data.frame(Start = i - hours(1), End = i + hours(1), Filter = val))
       }
     }
     
@@ -237,16 +237,61 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
 
   }
   
-
-  print(surge_periods)
+  # print("SURGES FOUND")
+  # print(surge_periods)
   
-  plot + xlab("Time") + ylab("Count") + ggtitle("Rolling Average with Sudden Increases") + theme_minimal()
-  
-  
+  return(list(plot = plot, surges = surge_periods))
 }
 
+fetch_alarm_table_data <- function(data, start_datetime, end_datetime, ...) {
+  agents <- unlist(list(...))
+  
+  # Filter data based on RAISETIME and AGENT
+  filtered_data <- data %>%
+    filter(RAISETIME >= start_datetime, RAISETIME <= end_datetime, AGENT %in% agents)
+  
+  return(filtered_data)
+}
 
-# Function to plot missing values
+find_overlapping_alarms <- function(surge_periods) {
+  surge_periods <- surge_periods[order(surge_periods$Start),]
+  
+  overlap_info <- list()
+  
+  for (i in 1:nrow(surge_periods)) {
+    # Current surge period to compare others against
+    current_period <- surge_periods[i, ]
+    
+    # Find potential overlaps: other periods that start before current period ends
+    potential_overlaps <- surge_periods[surge_periods$Start <= current_period$End, ]
+    
+    # Loop through each potential overlap
+    for (j in 1:nrow(potential_overlaps)) {
+      other_period <- potential_overlaps[j, ]
+      
+      # Check for actual overlap and that it's not the same agent or the same period
+      if (other_period$End >= current_period$Start &&
+          other_period$Filter != current_period$Filter) {
+        
+        # Record the overlap
+        overlap_info <- c(overlap_info, list(
+          list(
+            Agent1 = current_period$Filter,
+            Agent2 = other_period$Filter,
+            OverlapStart = max(current_period$Start, other_period$Start),
+            OverlapEnd = min(current_period$End, other_period$End)
+          )
+        ))
+      }
+    }
+  }
+  
+  print("OVERLAPS FOUND")
+  print(overlap_info)
+  
+  return(overlap_info)
+}
+
 plot_missing_data <- function(data) {
   # Identify columns that are not date or time to avoid conversion issues
   non_datetime_cols <- sapply(data, function(x) !inherits(x, "Date") && !inherits(x, "POSIXt"))
@@ -288,8 +333,6 @@ extract_and_write_to_csv <- function(data, start_datetime, end_datetime, filenam
   return(extracted_data)
 }
 
-library(ggplot2)
-
 plot_timeline_for_agent <- function(data, start_time, end_time) {
   # Convert start_time and end_time to POSIXct if they are not already
   start_time <- as.POSIXct(start_time)
@@ -308,7 +351,6 @@ plot_timeline_for_agent <- function(data, start_time, end_time) {
   
   print(p)
 }
-
 
 find_related_alarms <- function(data, alarm_identifier, alarm_date, agent = NULL, timeframe = NULL) {
   # Input validation could be added here
@@ -331,9 +373,3 @@ find_related_alarms <- function(data, alarm_identifier, alarm_date, agent = NULL
   # Return the filtered dataframe or any other result you decide to generate
   # return(result)
 }
-
-# Example usage of the function (to be replaced with actual column names and logic):
-# related_alarms <- find_related_alarms(dataframe, "alarm123", "2023-01-02 15:55:12", agent="AgentName", timeframe=60)
-# This call would search for alarms related to "alarm123", optionally filtered by an agent and/or a timeframe.
-
-

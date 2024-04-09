@@ -7,5 +7,3 @@ library(naniar)
 library(tidyr)
 library(plotly)
 library(zoo)
-
-# Set global options or load global data here, if any

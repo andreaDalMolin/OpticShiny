@@ -3,6 +3,7 @@ library(shinydashboard)
 library(bslib)
 library(plotly)
 library(shinyjs)
+library(DT)
 
 source("global.R")
 source("functions.R")
@@ -92,17 +93,19 @@ ui <- dashboardPage(
       ),
       tabItem(tabName = "menu6",
               fluidRow(
-                column(4,
+                column(2,
                        selectizeInput("select_menu6", label = "Select an Agent", choices = unique(data$AGENT), multiple = TRUE),
-                       dateInput("start_date_menu6", label = "Select Start Date", value = "2024-01-28"),
-                       dateInput("end_date_menu6", label = "Select End Date", value = "2024-01-29"),
-                       textInput("start_time_menu6", label = "Enter Start Time (HH:MM)", value = "12:00"),
-                       textInput("end_time_menu6", label = "Enter End Time (HH:MM)", value = "13:00"),
-                       checkboxInput("alarm_toggle_menu6", label = "Toggle Feature On/Off", value = TRUE),
-                       sliderInput("slider_menu6", label = "Alarm Sensitivity", min = 0.1, max = 50, value = 1.5)
+                       dateInput("start_date_menu6", label = "Select Start Date", value = "2024-02-04"),
+                       textInput("start_time_menu6", label = "Enter Start Time (HH:MM)", value = "20:00"),
+                       dateInput("end_date_menu6", label = "Select End Date", value = "2024-02-06"),
+                       textInput("end_time_menu6", label = "Enter End Time (HH:MM)", value = "10:00"),
+                       checkboxInput("alarm_toggle_menu6", label = "Toggle surges", value = TRUE),
+                       sliderInput("slider_menu6", label = "Alarm Sensitivity", min = 0.1, max = 50, value = 1.5),
+                       textOutput("overlapping_nb")
                 ),
-                column(8,
-                       plotlyOutput("menu6_output")
+                column(10,
+                       plotlyOutput("menu6_output"),
+                       DTOutput("table_menu6") # Placeholder for the table output
                 )
               )
       )
@@ -236,6 +239,8 @@ server <- function(input, output) {
     })
   })
   
+  surges_reactive <- reactiveValues(data = NULL)
+  
   output$menu6_output <- renderPlotly({
     
     # Combine the date and start time into a single datetime string
@@ -248,7 +253,8 @@ server <- function(input, output) {
     end_datetime_formatted <- format(as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     
     
-    plot <- do.call(create_line_plot_alarm, 
+    
+    result <- do.call(create_line_plot_alarm, 
                     list(data = data, 
                          start_datetime = start_datetime_formatted, 
                          end_datetime = end_datetime_formatted, 
@@ -256,7 +262,47 @@ server <- function(input, output) {
                          input$alarm_toggle_menu6,
                          input$select_menu6))
     
-    plot
+    # Step 2: Update the reactive value with the surge data
+    surges_reactive$data <- result$surges
+    
+    # Return the plot
+    result$plot
+  })
+  
+  output$table_menu6 <- renderDT({
+    # # Combine the date and start time into a single datetime string
+    # start_datetime <- paste(input$start_date_menu6, input$start_time_menu6)
+    # # Combine the date and end time into a single datetime string
+    # end_datetime <- paste(input$end_date_menu6, input$end_time_menu6)
+    # 
+    # # Format the datetime strings
+    # start_datetime_formatted <- format(as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
+    # end_datetime_formatted <- format(as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
+    # 
+    # 
+    # data <- fetch_alarm_table_data(data, start_datetime, end_datetime, input$select_menu6)
+    
+    overlapping_table <- find_overlapping_alarms(surges_reactive$data)
+    
+    # Assuming 'find_overlapping_alarms' returns data in a list format that needs to be converted to a dataframe
+    # Convert the list of overlaps to a dataframe if 'find_overlapping_alarms' returns a list of lists
+    if (length(overlapping_table) > 0) {
+      overlapping_df <- do.call(rbind, lapply(overlapping_table, function(x) data.frame(t(unlist(x)), stringsAsFactors = FALSE)))
+      colnames(overlapping_df) <- c("Agent1", "Agent2", "OverlapStart", "OverlapEnd")
+    } else {
+      # Create an empty dataframe with the same columns if no overlaps are found
+      overlapping_df <- data.frame(Agent1 = character(), Agent2 = character(), OverlapStart = as.POSIXct(character()), OverlapEnd = as.POSIXct(character()), stringsAsFactors = FALSE)
+    }
+    
+    datatable(overlapping_df, options = list(pageLength = 5))
+  })
+  
+  output$overlapping_nb <- renderText({
+    if (is.null(surges_reactive$data) || nrow(surges_reactive$data) == 0) {
+      return("No overlaps found.")
+    } else {
+      return(paste("Number of overlaps found:", nrow(surges_reactive$data)))
+    }
   })
 }
 

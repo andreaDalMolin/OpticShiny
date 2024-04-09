@@ -1,0 +1,339 @@
+# Function to create histogram by time
+create_histogram_by_time <- function(data, title_prefix) {
+  ggplot(data, aes(x = hour(TIME))) +
+    geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+    labs(title = paste(title_prefix, "- Number of Alarms by Time of Day"),
+         x = "Hour of Day",
+         y = "Frequency") +
+    theme_minimal()
+}
+
+# Function to create bar plot by day
+create_barplot_by_day <- function(data, title_prefix) {
+  ggplot(data, aes(x = DAY_OF_WEEK)) +
+    geom_bar(stat = "count", fill = "blue", color = 'black') +
+    labs(title = paste(title_prefix, "- Number of Alarms by Day of the Week"), 
+         x = "Day of Week", 
+         y = "Number of Events") +
+    scale_x_discrete(drop = FALSE) +
+    theme_minimal()
+}
+
+# Function for creating heatmap by hour and day
+create_heatmap_by_hour_day <- function(data, title_prefix, day_names) {
+  # Filter data based on title_prefix
+  filtered_data <- data[data$AGENT == title_prefix, ]
+  
+  # Prepare filtered data: Count the number of events for each combination of DAY and HOUR
+  event_counts <- filtered_data %>%
+    group_by(DAY_OF_WEEK, HOUR) %>%
+    summarise(Count = n(), .groups = 'drop')  # Count events and drop grouping
+  
+  # Create the heatmap plot
+  ggplot(event_counts, aes(x = HOUR, y = factor(DAY_OF_WEEK, labels = day_names), fill = Count)) + 
+    geom_tile() +
+    scale_fill_gradient(low = "lightblue", high = "darkblue") +
+    labs(title = paste(title_prefix, "- Number of Alarms by Hour and Day of the Week"), 
+         x = "Hour of the Day", 
+         y = "Day of the Week", 
+         fill = "Number of Events") +
+    theme_minimal()
+}
+
+generate_heatmaps_for_top_weeks <- function(data, n_weeks, day_names) {
+  # Specify the directory to save the plots
+  plot_directory <- "Data/Output/R Graphs/"
+  if (!dir.exists(plot_directory)) {
+    dir.create(plot_directory, recursive = TRUE)
+  }
+  
+  # Aggregate data to count events per week
+  events_per_week <- data %>%
+    group_by(WEEK) %>%
+    summarise(Events = n(), .groups = 'drop') %>%
+    arrange(desc(Events)) %>%
+    slice(1:n_weeks)  # Select the top N weeks with the most events
+  
+  # Extract the WEEK values for these top weeks
+  interesting_weeks <- events_per_week$WEEK
+  
+  # Generate and save heatmaps for the top N interesting weeks
+  for (week in interesting_weeks) {
+    week_data <- data[data$WEEK == week,]
+    p <- create_heatmap_by_hour_day(week_data, sprintf("Week %d", week), day_names)
+    
+    # Construct a filename for each plot
+    plot_filename <- sprintf("Week_%d_Heatmap.png", week)
+    full_plot_path <- file.path(plot_directory, plot_filename)
+    
+    # Save the plot using ggsave
+    ggsave(full_plot_path, plot = p, width = 10, height = 8, dpi = 300)
+  }
+}
+
+create_heatmap_for_week <- function(data, week_number, day_names, agent) {
+  # Filter data for specifiec AGENT, if present
+  if (agent != '') {
+    agent_data <- data[data$AGENT == agent,]
+  } else {
+    agent_data <- data
+  }
+  
+  # Filter data for the specified week
+  week_data <- agent_data[agent_data$WEEK == week_number,]
+  
+  # Prepare data: Count the number of events for each combination of DAY and HOUR
+  event_counts <- week_data %>%
+    group_by(DAY_OF_WEEK, HOUR) %>%
+    summarise(Count = n(), .groups = 'drop')  # Count events and drop grouping
+  
+  # Calculate the start and end date of the week
+  start_date <- min(week_data$DATE)
+  end_date <- max(week_data$DATE)
+  
+  # Generate the heatmap
+  p <- ggplot(event_counts, aes(x = HOUR, y = factor(DAY_OF_WEEK, labels = day_names), fill = Count)) + 
+    geom_tile() +
+    scale_fill_gradient(low = "lightblue", high = "darkblue") +
+    labs(title = sprintf("%s - Week %d (%s to %s) - Number of Alarms by Hour and Day of the Week", 
+                         agent,
+                         week_number, 
+                         format(start_date, "%d/%m/%Y"), 
+                         format(end_date, "%d/%m/%Y")), 
+         x = "Hour of the Day", 
+         y = "Day of the Week", 
+         fill = "Number of Events") +
+    theme_minimal()
+  
+  # Display the plot
+  print(p)
+}
+
+create_agent_alarm_bar_plot <- function(data, start_datetime, end_datetime, top_n_agents = NULL) {
+  start_datetime <- as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  end_datetime <- as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  
+  filtered_data <- data %>%
+    filter(RAISETIME >= start_datetime & RAISETIME <= end_datetime)
+  
+  agent_alarms_severity <- filtered_data %>%
+    group_by(AGENT, ORIGINALSEVERITY) %>%
+    summarise(Alarms = n(), .groups = 'drop') %>%
+    ungroup() %>%
+    arrange(desc(Alarms))
+  
+  # Calculating TotalAlarms for each AGENT for ordering purposes
+  total_alarms_per_agent <- agent_alarms_severity %>%
+    group_by(AGENT) %>%
+    summarise(TotalAlarms = sum(Alarms)) %>%
+    arrange(desc(TotalAlarms))
+  
+  # Joining total alarms back to the main dataset for plotting
+  agent_alarms_severity <- agent_alarms_severity %>%
+    inner_join(total_alarms_per_agent, by = "AGENT")
+  
+  # Filtering to top_n_agents if specified
+  if (!is.null(top_n_agents)) {
+    top_n_agents <- as.integer(top_n_agents)
+    top_agents <- head(total_alarms_per_agent$AGENT, top_n_agents)
+    agent_alarms_severity <- agent_alarms_severity %>%
+      filter(AGENT %in% top_agents)
+  }
+  
+  title_text <- if (is.null(top_n_agents)) "Number of Alarms by Agent" else paste("Top", top_n_agents, "Agents by Number of Alarms")
+  p <- ggplot(agent_alarms_severity, aes(x = reorder(AGENT, TotalAlarms), y = Alarms, fill = ORIGINALSEVERITY, text = paste("Agent:", AGENT, "\nAlarms:", Alarms, "\nSeverity:", ORIGINALSEVERITY))) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    scale_fill_manual(values = c("Critical" = "red", "Major" = "orange", "Minor" = "yellow", "Warning" = "lightblue", "Indeterminate" = "grey")) +
+    theme_minimal() +
+    labs(title = paste(title_text, "from", format(start_datetime, "%Y-%m-%d %H:%M:%S"), "to", format(end_datetime, "%Y-%m-%d %H:%M:%S")), x = "Agent", y = "Number of Alarms")
+  
+  
+  print(p)
+}
+
+create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThreshold, drawAlarms, ...) {
+  # Convert start_time and end_time to POSIXct if they are not already
+  start_time <- as.POSIXct(start_datetime, tz = "UTC")
+  end_time <- as.POSIXct(end_datetime, tz = "UTC")
+  
+  # Extract the ... arguments into a vector
+  filter_vals <- c(...)
+  
+  print(filter_vals)
+  
+  # Initialize an empty data frame for the hourly counts
+  all_hourly_counts <- data.frame(Hour = character(), Count = numeric(), Filter = character(), Avg = numeric(), StdDev = numeric())
+  surge_periods <- data.frame(Start = character(), End = character(), Filter = character())
+  
+  # Filter data for the given time frame
+  timeframe_data <- data[data$RAISETIME >= start_time & data$RAISETIME <= end_time, ]
+  
+  for (val in filter_vals) {
+    # Filter and summarize data
+    filtered_data <- timeframe_data %>%
+      filter(AGENT == val) %>%
+      mutate(Hour = floor_date(RAISETIME, "hour")) %>%
+      group_by(Hour) %>%
+      summarise(Count = n()) %>%
+      mutate(Filter = val)
+    
+    # Calculate rolling average and standard deviation
+    window_size <- 3 # Adjust based on your data and needs
+    filtered_data <- filtered_data %>%
+      arrange(Hour) %>%
+      mutate(Avg = rollapply(Count, width = window_size, FUN = mean, fill = NA, align = "right"),
+             StdDev = rollapply(Count, width = window_size, FUN = sd, fill = NA, align = "right"),
+             Upper = Avg + StdDev, # Upper bound for the ribbon
+             Lower = Avg - StdDev) # Lower bound for the ribbon
+    
+    # Detect sudden increases - simplistic approach based on Avg change
+    surge_detection <- diff(filtered_data$Avg) > customThreshold
+    surge_hours <- filtered_data$Hour[c(FALSE, surge_detection)] # Shift to align with diff output
+    
+    # Add to surge periods data frame
+    if(length(surge_hours) > 0) {
+      for(i in surge_hours) {
+        surge_periods <- rbind(surge_periods, data.frame(Start = i - minutes(30), End = i + minutes(30), Filter = val))
+      }
+    }
+    
+    # Combine with previous counts
+    all_hourly_counts <- rbind(all_hourly_counts, filtered_data)
+  }
+  
+  surge_periods$Start <- as.POSIXct(surge_periods$Start, origin="1970-01-01")
+  surge_periods$End <- as.POSIXct(surge_periods$End, origin="1970-01-01")
+  
+  surge_periods <- na.omit(surge_periods)
+  
+  # Determine ymin and ymax based on data range
+  ymin_val <- min(all_hourly_counts$Avg - all_hourly_counts$StdDev, na.rm = TRUE)
+  ymax_val <- max(all_hourly_counts$Avg + all_hourly_counts$StdDev, na.rm = TRUE)
+  
+  # Optionally add padding
+  padding <- (ymax_val - ymin_val) * 0.1 # 10% padding
+  ymin_val <- ymin_val - padding
+  ymax_val <- ymax_val + padding
+  
+  # Create the base plot with rolling averages and deviation ribbons
+  plot <- ggplot(all_hourly_counts, aes(x = Hour, y = Avg, group = Filter, color = Filter)) +
+    geom_line() +
+    geom_ribbon(aes(ymin = Avg - StdDev, ymax = Avg + StdDev, fill = Filter), alpha = 0.2) +
+    geom_point(aes(y = Count), alpha = 0.5)
+  
+  # Highlight surge periods
+  if (drawAlarms) {
+    for(surge in unique(surge_periods$Filter)) {
+      surge_data <- surge_periods[surge_periods$Filter == surge,]
+      for(i in 1:nrow(surge_data)) {
+        plot <- plot + geom_rect(data = surge_data, 
+                                 xmin = as.numeric(surge_data[i,]$Start), 
+                                 xmax = as.numeric(surge_data[i,]$End), 
+                                 ymin = ymin_val, ymax = ymax_val, 
+                                 fill = "red", alpha = 0.2, inherit.aes = FALSE)
+      }
+  }
+
+  }
+  
+
+  print(surge_periods)
+  
+  plot + xlab("Time") + ylab("Count") + ggtitle("Rolling Average with Sudden Increases") + theme_minimal()
+  
+  
+}
+
+
+# Function to plot missing values
+plot_missing_data <- function(data) {
+  # Identify columns that are not date or time to avoid conversion issues
+  non_datetime_cols <- sapply(data, function(x) !inherits(x, "Date") && !inherits(x, "POSIXt"))
+  data_non_datetime <- data[, non_datetime_cols]
+
+  # Calculate the number of missing values per column, including NA and empty strings
+  missing_data <- sapply(data_non_datetime, function(x) sum(is.na(x) | x == ""))
+
+  # Create a data frame for plotting
+  missing_data_df <- data.frame(
+    Column = names(missing_data),
+    MissingValues = missing_data
+  ) %>%
+    arrange(desc(MissingValues)) %>%
+    filter(MissingValues > 0)  # Optional: Filter out columns with no missing data
+  
+  # Generate the plot
+  ggplot(missing_data_df, aes(x = reorder(Column, MissingValues), y = MissingValues)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    theme_minimal() +
+    labs(title = "Missing and Empty Values per Column (Excluding Date/Time)", x = "Column", y = "Number of Missing/Empty Values") +
+    coord_flip()  # Flip coordinates to make it easier to read column names
+}
+
+extract_and_write_to_csv <- function(data, start_datetime, end_datetime, filename) {
+  # Convert start_datetime and end_datetime to POSIXct in UTC timezone
+  start_datetime <- as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  end_datetime <- as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  
+  # Filter data based on the provided datetime range
+  extracted_data <- data %>%
+    filter(RAISETIME >= start_datetime & RAISETIME <= end_datetime)
+  
+  # Write the extracted data to a CSV file
+  # write.csv(extracted_data, filename, row.names = FALSE, sep = ';')
+  
+  cat("Data extracted and written to", filename, "\n")
+  
+  return(extracted_data)
+}
+
+library(ggplot2)
+
+plot_timeline_for_agent <- function(data, start_time, end_time) {
+  # Convert start_time and end_time to POSIXct if they are not already
+  start_time <- as.POSIXct(start_time)
+  end_time <- as.POSIXct(end_time)
+  
+  # Filter data for the given time frame
+  filtered_data <- data[data$RAISETIME >= start_time & data$RAISETIME <= end_time, ]
+  
+  # Plot timeline
+  p <- ggplot(filtered_data, aes(x = RAISETIME, y = AGENT)) +
+    geom_point(color = "blue", size = 3) +
+    labs(x = "Time", y = "Agent", title = "Timeline of Triggers for Agent EMMA") +
+    theme_minimal() +
+    scale_x_datetime(date_breaks = "1 hour", date_labels = "%H:%M") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  print(p)
+}
+
+
+find_related_alarms <- function(data, alarm_identifier, alarm_date, agent = NULL, timeframe = NULL) {
+  # Input validation could be added here
+  
+  # Placeholder for the function logic to filter or manipulate the 'data' dataframe
+  # based on the provided parameters.
+  
+  # Example:
+  # if (!is.null(agent)) {
+  #   data <- data[data$agent_column_name == agent, ]
+  # }
+  #
+  # if (!is.null(timeframe)) {
+  #   # Code to filter alarms within the specified 'timeframe' around 'alarm_date'
+  # }
+  #
+  # Filter 'data' to find related alarms based on 'alarm_identifier' and other conditions
+  # result <- data[data$alarm_identifier_column == alarm_identifier, ]
+  
+  # Return the filtered dataframe or any other result you decide to generate
+  # return(result)
+}
+
+# Example usage of the function (to be replaced with actual column names and logic):
+# related_alarms <- find_related_alarms(dataframe, "alarm123", "2023-01-02 15:55:12", agent="AgentName", timeframe=60)
+# This call would search for alarms related to "alarm123", optionally filtered by an agent and/or a timeframe.
+
+

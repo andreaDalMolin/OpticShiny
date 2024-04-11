@@ -154,8 +154,8 @@ create_agent_alarm_bar_plot <- function(data, start_datetime, end_datetime, top_
 
 create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThreshold, drawAlarms, ...) {
   # Convert start_time and end_time to POSIXct if they are not already
-  start_time <- as.POSIXct(start_datetime, tz = "UTC")
-  end_time <- as.POSIXct(end_datetime, tz = "UTC")
+  start_time <- as.POSIXct(start_datetime)
+  end_time <- as.POSIXct(end_datetime)
   
   # Extract the ... arguments into a vector
   filter_vals <- c(...)
@@ -207,6 +207,15 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
   
   surge_periods <- na.omit(surge_periods)
   
+  # Merge consecutive surges for each agent
+  surge_periods <- surge_periods %>%
+    group_by(Filter) %>%
+    arrange(Filter, Start) %>%
+    mutate(EndGroup = lag(End, default = first(End)) >= Start - minutes(1)) %>%
+    group_by(Filter, cumsum(!EndGroup)) %>%
+    summarise(Start = first(Start), End = last(End)) %>%
+    ungroup()
+  
   # Determine ymin and ymax based on data range
   ymin_val <- min(all_hourly_counts$Avg - all_hourly_counts$StdDev, na.rm = TRUE)
   ymax_val <- max(all_hourly_counts$Avg + all_hourly_counts$StdDev, na.rm = TRUE)
@@ -234,11 +243,10 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
                                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
       }
   }
-
   }
   
   # print("SURGES FOUND")
-  # print(surge_periods)
+  print(surge_periods)
   
   return(list(plot = plot, surges = surge_periods))
 }
@@ -259,38 +267,46 @@ find_overlapping_alarms <- function(surge_periods) {
   overlap_info <- list()
   
   for (i in 1:nrow(surge_periods)) {
-    # Current surge period to compare others against
-    current_period <- surge_periods[i, ]
+    current_period <- surge_periods[i,]
     
-    # Find potential overlaps: other periods that start before current period ends
-    potential_overlaps <- surge_periods[surge_periods$Start <= current_period$End, ]
+    # Find potential overlaps
+    potential_overlaps <- surge_periods[surge_periods$Start <= current_period$End,]
     
-    # Loop through each potential overlap
     for (j in 1:nrow(potential_overlaps)) {
-      other_period <- potential_overlaps[j, ]
+      other_period <- potential_overlaps[j,]
       
       # Check for actual overlap and that it's not the same agent or the same period
-      if (other_period$End >= current_period$Start &&
-          other_period$Filter != current_period$Filter) {
+      if (other_period$End >= current_period$Start && other_period$Filter != current_period$Filter) {
         
-        # Record the overlap
-        overlap_info <- c(overlap_info, list(
-          list(
-            Agent1 = current_period$Filter,
-            Agent2 = other_period$Filter,
-            OverlapStart = max(current_period$Start, other_period$Start),
-            OverlapEnd = min(current_period$End, other_period$End)
-          )
-        ))
+        # Sort agents to ensure consistency in how overlaps are recorded
+        agents <- sort(c(current_period$Filter, other_period$Filter))
+        
+        # Create a potential new overlap entry
+        new_overlap <- list(
+          Agent1 = agents[1],
+          Agent2 = agents[2],
+          OverlapStart = max(current_period$Start, other_period$Start),
+          OverlapEnd = min(current_period$End, other_period$End)
+        )
+        
+        # Check if this overlap is already recorded
+        already_recorded <- any(sapply(overlap_info, function(oi) {
+          identical(oi, new_overlap)
+        }))
+        
+        # If not already recorded, add to the list
+        if (!already_recorded) {
+          overlap_info <- c(overlap_info, list(new_overlap))
+        }
       }
     }
   }
   
-  print("OVERLAPS FOUND")
   print(overlap_info)
   
   return(overlap_info)
 }
+
 
 plot_missing_data <- function(data) {
   # Identify columns that are not date or time to avoid conversion issues

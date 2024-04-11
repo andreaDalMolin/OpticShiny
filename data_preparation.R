@@ -19,11 +19,11 @@ data <- do.call(rbind, data_list)
 ##### PREPPING DATA ######
 ##########################
 
-data$RAISETIME <- dmy_hms(data$RAISETIME)
+data$RAISETIME <- dmy_hms(data$RAISETIME, tz = "CET")
 data$DATE <- as.Date(data$RAISETIME)
 data$TIME <- format(data$RAISETIME, "%H:%M:%S")
-data$TIME <- as.POSIXct(data$TIME, format = "%H:%M:%S")
-data$HOUR <- format(as.POSIXct(data$RAISETIME), "%H")
+data$TIME <- as.POSIXct(data$TIME, format = "%H:%M:%S", tz = "CET")
+data$HOUR <- format(as.POSIXct(data$RAISETIME), "%H", tz = "CET")
 data$WEEK <- isoweek(data$DATE)
 days_of_week <- c("Monday" = 1, "Tuesday" = 2, "Wednesday" = 3, "Thursday" = 4, "Friday" = 5, "Saturday" = 6, "Sunday" = 7)
 data$DAY_OF_WEEK <- sapply(weekdays(data$DATE), function(x) days_of_week[x])

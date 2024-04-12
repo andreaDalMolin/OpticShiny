@@ -305,7 +305,6 @@ find_overlapping_alarms <- function(surge_periods) {
   return(overlap_info)
 }
 
-
 plot_missing_data <- function(data) {
   # Identify columns that are not date or time to avoid conversion issues
   non_datetime_cols <- sapply(data, function(x) !inherits(x, "Date") && !inherits(x, "POSIXt"))

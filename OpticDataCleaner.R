@@ -40,7 +40,6 @@ export_monthly_csv(data_in_bounds)
 optic_2024_03 <- read.csv("Optic_2024_03.csv", header = TRUE, sep = ",")
 
 
-
 export_monthly_csv <- function(data) {
   # Create a new column 'YearMonth' to store the combined year and month in 'YYYY_MM' format
   data <- data %>%

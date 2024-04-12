@@ -159,9 +159,7 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
   
   # Extract the ... arguments into a vector
   filter_vals <- c(...)
-  
-  print(filter_vals)
-  
+
   # Initialize an empty data frame for the hourly counts
   all_hourly_counts <- data.frame(Hour = character(), Count = numeric(), Filter = character(), Avg = numeric(), StdDev = numeric())
   surge_periods <- data.frame(Start = character(), End = character(), Filter = character())
@@ -242,10 +240,10 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
                                  ymin = ymin_val, ymax = ymax_val, 
                                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
       }
-  }
+    }
   }
   
-  # print("SURGES FOUND")
+  print("SURGES FOUND")
   print(surge_periods)
   
   return(list(plot = plot, surges = surge_periods))

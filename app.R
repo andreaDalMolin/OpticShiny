@@ -105,7 +105,7 @@ ui <- dashboardPage(
                 ),
                 column(10,
                        plotlyOutput("menu6_output"),
-                       DTOutput("table_menu6") # Placeholder for the table output
+                       DTOutput("table_menu6")
                 )
               )
       )
@@ -293,7 +293,7 @@ server <- function(input, output) {
     if (is.null(surges_reactive$data) || nrow(surges_reactive$data) == 0) {
       return("No overlaps found.")
     } else {
-      return(paste("Number of overlaps found:", nrow(surges_reactive$data)))
+      return(paste("Total number of spikes found:", nrow(surges_reactive$data)))
     }
   })
 }

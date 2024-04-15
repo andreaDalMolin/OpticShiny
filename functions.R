@@ -71,43 +71,53 @@ generate_heatmaps_for_top_weeks <- function(data, n_weeks, day_names) {
   }
 }
 
-create_heatmap_for_week <- function(data, week_number, day_names, agent) {
-  # Filter data for specifiec AGENT, if present
-  if (agent != '') {
-    agent_data <- data[data$AGENT == agent,]
+create_heatmap_for_week <- function(data, start_date, agent) {
+  # Convert start_date to Date if it's not
+  start_date <- as.Date(start_date)
+  
+  # Define end date based on start date
+  end_date <- start_date + 6
+  end_date <- as.POSIXct(paste(end_date, "23:59:59"))
+  
+  # Filter data for specified AGENT, if present
+  agent_data <- if (agent != '') {
+    data[data$AGENT == agent,]
   } else {
-    agent_data <- data
+    data
   }
-  
-  # Filter data for the specified week
-  week_data <- agent_data[agent_data$WEEK == week_number,]
-  
-  # Prepare data: Count the number of events for each combination of DAY and HOUR
+
+  # Filter data for the specified date range
+  week_data <- agent_data[agent_data$RAISETIME >= start_date & agent_data$RAISETIME <= end_date,]
+
+  # Prepare data: Count the number of events for each combination of DATE and HOUR
   event_counts <- week_data %>%
-    group_by(DAY_OF_WEEK, HOUR) %>%
+    mutate(DAY = as.factor(strftime(RAISETIME, "%Y-%m-%d"))) %>%
+    group_by(DAY, HOUR) %>%
     summarise(Count = n(), .groups = 'drop')  # Count events and drop grouping
   
-  # Calculate the start and end date of the week
-  start_date <- min(week_data$DATE)
-  end_date <- max(week_data$DATE)
+  # Reorder DAY factor levels in descending order so the earliest date is on top
+  event_counts$DAY <- factor(event_counts$DAY, levels = rev(levels(event_counts$DAY)))
   
   # Generate the heatmap
-  p <- ggplot(event_counts, aes(x = HOUR, y = factor(DAY_OF_WEEK, labels = day_names), fill = Count)) + 
+  p <- ggplot(event_counts, aes(x = HOUR, y = DAY, fill = Count)) +
     geom_tile() +
     scale_fill_gradient(low = "lightblue", high = "darkblue") +
-    labs(title = sprintf("%s - Week %d (%s to %s) - Number of Alarms by Hour and Day of the Week", 
+    labs(title = sprintf("%s - Alarms from %s to %s - Number of Alarms by Hour and Day",
                          agent,
-                         week_number, 
-                         format(start_date, "%d/%m/%Y"), 
-                         format(end_date, "%d/%m/%Y")), 
-         x = "Hour of the Day", 
-         y = "Day of the Week", 
+                         format(start_date, "%d/%m/%Y"),
+                         format(end_date, "%d/%m/%Y")),
+         x = "Hour of the Day",
+         y = "Date",
          fill = "Number of Events") +
     theme_minimal()
   
   # Display the plot
   print(p)
 }
+
+
+
+
 
 create_agent_alarm_bar_plot <- function(data, start_datetime, end_datetime, top_n_agents = NULL) {
   start_datetime <- as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")

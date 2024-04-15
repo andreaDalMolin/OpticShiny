@@ -14,7 +14,6 @@ data_list <- lapply(data_files, function(file) read.csv(file, header = TRUE, sep
 data <- do.call(rbind, data_list)
 
 
-
 ##########################
 ##### PREPPING DATA ######
 ##########################

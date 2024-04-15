@@ -40,6 +40,45 @@ create_heatmap_by_hour_day <- function(data, title_prefix, day_names) {
     theme_minimal()
 }
 
+create_heatmap_for_range <- function(data, start_date, end_date, agent) {
+  start_date <- as.Date(start_date)
+  end_date <- as.Date(end_date)
+  
+  agent_data <- if (agent != '') {
+    data[data$AGENT == agent,]
+  } else {
+    data
+  }
+  
+  # Filter data for the specified date range
+  filtered_data <- agent_data[agent_data$RAISETIME >= start_date & agent_data$RAISETIME <= end_date,]
+  
+  # Prepare data: Count the number of events for each combination of DAY OF WEEK and HOUR
+  event_counts <- filtered_data %>%
+    mutate(DAY_OF_WEEK = weekdays(as.Date(RAISETIME)),  # or use lubridate::wday() for locale-independent names
+           HOUR = lubridate::hour(RAISETIME)) %>%
+    group_by(DAY_OF_WEEK, HOUR) %>%
+    summarise(Count = n(), .groups = 'drop')  # Count events and drop grouping
+  
+  # Generate the heatmap
+  p <- ggplot(event_counts, aes(x = HOUR, y = DAY_OF_WEEK, fill = Count)) + 
+    geom_tile() +
+    scale_fill_gradient(low = "lightblue", high = "darkblue") +
+    labs(title = sprintf("%s - Alarms from %s to %s - Number of Alarms by Hour and Day of Week", 
+                         agent,
+                         format(start_date, "%d/%m/%Y"), 
+                         format(end_date, "%d/%m/%Y")), 
+         x = "Hour of the Day", 
+         y = "Day of the Week", 
+         fill = "Number of Events") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 90))  # Optionally rotate x-axis text to prevent overlap
+  
+  # Display the plot
+  print(p)
+}
+
+
 generate_heatmaps_for_top_weeks <- function(data, n_weeks, day_names) {
   # Specify the directory to save the plots
   plot_directory <- "Data/Output/R Graphs/"
@@ -71,40 +110,57 @@ generate_heatmaps_for_top_weeks <- function(data, n_weeks, day_names) {
   }
 }
 
+
+
+
 create_heatmap_for_week <- function(data, start_date, agent) {
-  # Convert start_date to Date if it's not
   start_date <- as.Date(start_date)
   
-  # Define end date based on start date
+  # Only add days to start_date to compute end_date; do not convert to POSIXct here
   end_date <- start_date + 6
-  end_date <- as.POSIXct(paste(end_date, "23:59:59"))
   
-  # Filter data for specified AGENT, if present
   agent_data <- if (agent != '') {
     data[data$AGENT == agent,]
   } else {
     data
   }
-
-  # Filter data for the specified date range
-  week_data <- agent_data[agent_data$RAISETIME >= start_date & agent_data$RAISETIME <= end_date,]
-
-  print(start_date)
-  print(end_date)
   
-  # Prepare data: Count the number of events for each combination of DATE and HOUR
+  # Make sure to use the correct Date types for filtering
+  week_data <- agent_data[agent_data$RAISETIME >= as.POSIXct(start_date) & agent_data$RAISETIME <= as.POSIXct(paste(end_date, "23:59:59")),]
+  
+  # Prepare the data by extracting DAY and HOUR
+  week_data <- week_data %>%
+    mutate(
+      DAY = as.factor(strftime(RAISETIME, "%Y-%m-%d")),
+      HOUR = hour(RAISETIME)
+    )
+  
+  # Generate all days and hours combinations using seq.Date
+  all_days <- seq(from = start_date, to = end_date, by = "day")
+  all_hours <- 0:23
+  full_grid <- expand.grid(DAY = all_days, HOUR = all_hours)
+  full_grid$DAY <- as.factor(strftime(full_grid$DAY, "%Y-%m-%d"))
+  
+  # Count the number of events for each combination of DAY and HOUR
   event_counts <- week_data %>%
-    mutate(DAY = as.factor(strftime(RAISETIME, "%Y-%m-%d"))) %>%
     group_by(DAY, HOUR) %>%
-    summarise(Count = n(), .groups = 'drop')  # Count events and drop grouping
+    summarise(Count = n(), .groups = 'drop')
   
-  # Reorder DAY factor levels in descending order so the earliest date is on top
+  # Merge event counts with the full grid, filling in zeros where there are no events
+  event_counts <- full_grid %>%
+    left_join(event_counts, by = c("DAY", "HOUR")) %>%
+    replace_na(list(Count = 0))
+  
+  # Reorder DAY factor levels in descending order
   event_counts$DAY <- factor(event_counts$DAY, levels = rev(levels(event_counts$DAY)))
   
-  # Generate the heatmap
+  # Generate the heatmap using scale_fill_gradientn for custom color scaling
   p <- ggplot(event_counts, aes(x = HOUR, y = DAY, fill = Count)) +
     geom_tile() +
-    scale_fill_gradient(low = "lightblue", high = "darkblue") +
+    scale_x_continuous(breaks = 0:23, labels = 0:23) +  # Ensure all hours are shown
+    scale_fill_gradientn(colors = c("#FFFFFF00", "lightblue", "darkblue"),
+                         values = scales::rescale(c(0, 1, max(event_counts$Count, na.rm = TRUE))),
+                         na.value = "#FFFFFF00") +
     labs(title = sprintf("%s - Alarms from %s to %s - Number of Alarms by Hour and Day",
                          agent,
                          format(start_date, "%d/%m/%Y"),
@@ -117,7 +173,6 @@ create_heatmap_for_week <- function(data, start_date, agent) {
   # Display the plot
   print(p)
 }
-
 
 
 

@@ -89,6 +89,9 @@ create_heatmap_for_week <- function(data, start_date, agent) {
   # Filter data for the specified date range
   week_data <- agent_data[agent_data$RAISETIME >= start_date & agent_data$RAISETIME <= end_date,]
 
+  print(start_date)
+  print(end_date)
+  
   # Prepare data: Count the number of events for each combination of DATE and HOUR
   event_counts <- week_data %>%
     mutate(DAY = as.factor(strftime(RAISETIME, "%Y-%m-%d"))) %>%

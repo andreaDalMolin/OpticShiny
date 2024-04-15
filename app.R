@@ -43,8 +43,8 @@ ui <- dashboardPage(
                 column(4,
                        selectInput("select_menu2", label = "Select an Agent", choices = unique(data$AGENT)),
                        dateInput("start_date_menu2", label = "Select Start Date", value = Sys.Date()),
-                       actionButton("prev_week", "Back"),
-                       actionButton("next_week", "Next")
+                       actionButton("prev_week", "Previous week"),
+                       actionButton("next_week", "Next week")
                 ),
                 column(8,
                        plotlyOutput("menu2_output")
@@ -140,35 +140,28 @@ server <- function(input, output, session) {
     }
   })
 
-  # Initialize the current start date as a reactive value
-  current_start_date <- reactiveVal(as.Date(Sys.Date()))
-  
-  # Set an observer to update the current start date based on the input date
-  observe({
-    current_start_date(as.Date(input$start_date_menu2))
+  current_start_date <- reactive({
+    input$start_date_menu2
   })
   
   observeEvent(input$prev_week, {
-    # Calculate new date by subtracting 7 days
-    new_date <- as.Date(current_start_date()) - 7
-    # Update the reactive value and the date input
-    current_start_date(new_date)
-    updateDateInput(session, "start_date_menu2", value = new_date)
+    updateStartWeek(current_start_date(), -7)
   })
   
   observeEvent(input$next_week, {
-    # Calculate new date by adding 7 days
-    new_date <- as.Date(current_start_date()) + 7
-    # Update the reactive value and the date input
-    current_start_date(new_date)
-    updateDateInput(session, "start_date_menu2", value = new_date)
+    updateStartWeek(current_start_date(), 7)
   })
   
+  updateStartWeek <- function(current_date, offset) {
+    new_date <- as.Date(current_date) + offset
+    updateTextInput(session, "start_date_menu2", value = new_date)
+    output$menu2_output <- renderPlotly({
+      create_heatmap_for_week(data, new_date, input$select_menu2)
+    })
+  }
+  
   output$menu2_output <- renderPlotly({
-    req(input$prev_week, input$next_week)
-    
-    # Use the current start date for rendering the heatmap
-    create_heatmap_for_week(data, current_start_date(), input$select_menu2)
+    create_heatmap_for_week(data, input$start_date_menu2, input$select_menu2)
   })
   
   output$menu3_output <- renderPlotly({

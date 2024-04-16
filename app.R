@@ -46,44 +46,40 @@ ui <- dashboardPage(
       
       tabItem(tabName = "menu2",
               fluidRow(
-                tabItem(tabName = "menu2",
-                        fluidRow(
-                          # selectInput("select_menu2", label = "Select an Agent", choices = unique(data$AGENT)),
-                          selectizeInput("select_menu2", label = "Select an Agent (or multiple)", choices = unique(data$AGENT), multiple = TRUE),
-                          
-                          column(12,  # Use the full width
-                                 tabsetPanel(
-                                   # Tab for weekly data
-                                   tabPanel("Per week",
-                                            fluidRow(
-                                              column(4,  # Inputs on the left side within the tab
-                                                     dateInput("start_date_menu2", label = "Select Start Date", value = Sys.Date(), weekstart = 1),
-                                                     actionButton("prev_week", "Previous week"),
-                                                     actionButton("next_week", "Next week")
-                                              ),
-                                              column(8,  # Output on the right side within the same tab
-                                                     uiOutput("output_week")
-                                              )
-                                            )
-                                   ),
-                                   # Tab for cumulative data
-                                   tabPanel("Cumulative",
-                                            fluidRow(
-                                              column(4,  # Inputs on the left side within the tab
-                                                     # selectInput("select_menu2_cumulative", label = "Select an Agent", choices = unique(data$AGENT)),  # Ensuring unique ID
-                                                     dateInput("start_date_cumulative", label = "Select Start Date", value = Sys.Date() - 30, weekstart = 1),
-                                                     dateInput("end_date_cumulative", label = "Select End Date", value = Sys.Date(), weekstart = 1)
-                                              ),
-                                              column(8,  # Output on the right side within the same tab
-                                                     uiOutput("output_cumulative")
-                                              )
-                                            )
-                                   )
-                                 )
-                          )
-                        )
+                column(4,
+                       selectizeInput("select_menu2", label = "Select an Agent (or multiple)", choices = unique(data$AGENT), multiple = TRUE),
+                       radioButtons("radio_btn", label = "Select Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
+                       
+                       # Only show when Weekly selected
+                       conditionalPanel(
+                         condition = "input.radio_btn === 'Weekly'",
+                         dateInput("start_date_weekly", label = "Select Start Date", value = Sys.Date(), weekstart = 1),
+                         actionButton("prev_week", "Previous week"),
+                         actionButton("next_week", "Next week")
+                       ),
+                       
+                       # Only show when Cumulative selected
+                       conditionalPanel(
+                         condition = "input.radio_btn === 'Cumulative'",
+                         dateInput("start_date_cumulative", label = "Select Start Date", value = Sys.Date() - 30, weekstart = 1),
+                         dateInput("end_date_cumulative", label = "Select End Date", value = Sys.Date(), weekstart = 1)
+                       )
+                ),
+                column(8,
+                       # Only show when Weekly selected
+                       conditionalPanel(
+                         condition = "input.radio_btn === 'Weekly'",
+                         h4("Weekly Output", style = "margin-top: 20px;"),
+                         uiOutput("output_week")
+                       ),
+                       
+                       # Only show when Cumulative selected
+                       conditionalPanel(
+                         condition = "input.radio_btn === 'Cumulative'",
+                         h4("Cumulative Output", style = "margin-top: 20px;"),
+                         uiOutput("output_cumulative")
+                       )
                 )
-                
               )
       ),
       
@@ -195,18 +191,18 @@ server <- function(input, output, session) {
 
   # Function to update the start week and refresh the plot for "Per week"
   observeEvent(input$prev_week, {
-    new_date <- as.Date(input$start_date_menu2) - 7
-    updateDateInput(session, "start_date_menu2", value = new_date)
+    new_date <- as.Date(input$start_date_weekly) - 7
+    updateDateInput(session, "start_date_weekly", value = new_date)
   })
   
   observeEvent(input$next_week, {
-    new_date <- as.Date(input$start_date_menu2) + 7
-    updateDateInput(session, "start_date_menu2", value = new_date)
+    new_date <- as.Date(input$start_date_weekly) + 7
+    updateDateInput(session, "start_date_weekly", value = new_date)
   })
   
   observe({
-    req(input$start_date_menu2, input$select_menu2)  # Ensure necessary inputs are available
-    plots <- create_heatmap_for_week(data, input$start_date_menu2, input$select_menu2)
+    req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
+    plots <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
     
     lapply(seq_along(plots), function(i) {
       output[[paste("plot", i, sep="_")]] <- renderPlotly({
@@ -230,8 +226,8 @@ server <- function(input, output, session) {
 
   # Render the heatmap for the "Per week" tab
   output$output_week <- renderUI({
-    req(input$start_date_menu2, input$select_menu2)  # Ensure necessary inputs are available
-    plots <- create_heatmap_for_week(data, input$start_date_menu2, input$select_menu2)
+    req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
+    plots <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
     
     plot_output_list <- lapply(seq_along(plots), function(i) {
       plotName <- paste("plot", i, sep="_")

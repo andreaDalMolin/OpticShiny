@@ -48,7 +48,8 @@ ui <- dashboardPage(
               fluidRow(
                 tabItem(tabName = "menu2",
                         fluidRow(
-                          selectInput("select_menu2", label = "Select an Agent", choices = unique(data$AGENT)),
+                          # selectInput("select_menu2", label = "Select an Agent", choices = unique(data$AGENT)),
+                          selectizeInput("select_menu2", label = "Select an Agent (or multiple)", choices = unique(data$AGENT), multiple = TRUE),
                           
                           column(12,  # Use the full width
                                  tabsetPanel(
@@ -56,12 +57,12 @@ ui <- dashboardPage(
                                    tabPanel("Per week",
                                             fluidRow(
                                               column(4,  # Inputs on the left side within the tab
-                                                     dateInput("start_date_menu2", label = "Select Start Date", value = Sys.Date()),
+                                                     dateInput("start_date_menu2", label = "Select Start Date", value = Sys.Date(), weekstart = 1),
                                                      actionButton("prev_week", "Previous week"),
                                                      actionButton("next_week", "Next week")
                                               ),
                                               column(8,  # Output on the right side within the same tab
-                                                     plotlyOutput("output_week")
+                                                     uiOutput("output_week")
                                               )
                                             )
                                    ),
@@ -70,11 +71,11 @@ ui <- dashboardPage(
                                             fluidRow(
                                               column(4,  # Inputs on the left side within the tab
                                                      # selectInput("select_menu2_cumulative", label = "Select an Agent", choices = unique(data$AGENT)),  # Ensuring unique ID
-                                                     dateInput("start_date_cumulative", label = "Select Start Date", value = Sys.Date() - 30),
-                                                     dateInput("end_date_cumulative", label = "Select End Date", value = Sys.Date())
+                                                     dateInput("start_date_cumulative", label = "Select Start Date", value = Sys.Date() - 30, weekstart = 1),
+                                                     dateInput("end_date_cumulative", label = "Select End Date", value = Sys.Date(), weekstart = 1)
                                               ),
                                               column(8,  # Output on the right side within the same tab
-                                                     plotlyOutput("output_cumulative")
+                                                     uiOutput("output_cumulative")
                                               )
                                             )
                                    )
@@ -203,21 +204,62 @@ server <- function(input, output, session) {
     updateDateInput(session, "start_date_menu2", value = new_date)
   })
   
-  # Render the heatmap for the "Per week" tab
-  output$output_week <- renderPlotly({
+  observe({
     req(input$start_date_menu2, input$select_menu2)  # Ensure necessary inputs are available
-    create_heatmap_for_week(data, input$start_date_menu2, input$select_menu2)
+    plots <- create_heatmap_for_week(data, input$start_date_menu2, input$select_menu2)
+    
+    lapply(seq_along(plots), function(i) {
+      output[[paste("plot", i, sep="_")]] <- renderPlotly({
+        return(plots[[i]])
+      })
+    })
+  })
+
+  observe({
+    req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
+    if (as.Date(input$start_date_cumulative) <= as.Date(input$end_date_cumulative)) {
+      plots <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
+      
+      lapply(seq_along(plots), function(i) {
+        output[[paste("cumulative_plot", i, sep="_")]] <- renderPlotly({
+          return(plots[[i]])
+        })
+      })
+    }
+  })
+
+  # Render the heatmap for the "Per week" tab
+  output$output_week <- renderUI({
+    req(input$start_date_menu2, input$select_menu2)  # Ensure necessary inputs are available
+    plots <- create_heatmap_for_week(data, input$start_date_menu2, input$select_menu2)
+    
+    plot_output_list <- lapply(seq_along(plots), function(i) {
+      plotName <- paste("plot", i, sep="_")
+      plotlyOutput(plotName, height = "300px")
+    })
+    
+    # Return a list of plot outputs
+    do.call(tagList, plot_output_list)
   })
   
   # Render the heatmap for the "Cumulative" tab
-  output$output_cumulative <- renderPlotly({
+  output$output_cumulative <- renderUI({
     req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
     if (as.Date(input$start_date_cumulative) <= as.Date(input$end_date_cumulative)) {
-      create_heatmap_for_range(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
+      plots <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
+
+      plot_output_list <- lapply(seq_along(plots), function(i) {
+        plotName <- paste("cumulative_plot", i, sep="_")
+        plotlyOutput(plotName, height = "300px")
+      })
+      
+      # Return a list of plot outputs
+      do.call(tagList, plot_output_list)
     } else {
       showNotification("Start date must be before end date!", type = "error")
     }
   })
+  
   
   ###### MENU 3 ######
   

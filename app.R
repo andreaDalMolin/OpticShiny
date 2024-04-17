@@ -29,12 +29,16 @@ ui <- dashboardPage(
       
       tabItem(tabName = "menu1",
               fluidRow(
+                
                 column(4,
-                       dateInput("start_date_menu1", label = "Select Start Date", value = Sys.Date()),
-                       dateInput("end_date_menu1", label = "Select End Date", value = Sys.Date()),
-                       textInput("start_time_menu1", label = "Enter Start Time (HH:MM)", value = "12:00"),
-                       textInput("end_time_menu1", label = "Enter End Time (HH:MM)", value = "12:00"),
-                       selectInput("select_menu1", label = "Select the number of items shown", choices = c(5, 10, 15))
+                       shinydashboard::box(
+                         title = "Filters",
+                         dateInput("start_date_menu1", label = "Select Start Date", value = Sys.Date()),
+                         dateInput("end_date_menu1", label = "Select End Date", value = Sys.Date()),
+                         textInput("start_time_menu1", label = "Enter Start Time (HH:MM)", value = "12:00"),
+                         textInput("end_time_menu1", label = "Enter End Time (HH:MM)", value = "12:00"),
+                         selectInput("select_menu1", label = "Select the number of items shown", choices = c(5, 10, 15))
+                       )     
                 ),
                 column(8,
                        plotlyOutput("menu1_output")
@@ -46,7 +50,11 @@ ui <- dashboardPage(
       
       tabItem(tabName = "menu2",
               fluidRow(
-                column(4,
+                   column(
+                     width = 4,
+                     shinydashboard::box(
+                       title = "Filters",
+                       width = NULL,
                        selectizeInput("select_menu2", label = "Select an Agent (or multiple)", choices = unique(data$AGENT), multiple = TRUE),
                        radioButtons("radio_btn", label = "Select Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
                        
@@ -55,31 +63,41 @@ ui <- dashboardPage(
                          condition = "input.radio_btn === 'Weekly'",
                          dateInput("start_date_weekly", label = "Select Start Date", value = Sys.Date(), weekstart = 1),
                          actionButton("prev_week", "Previous week"),
-                         actionButton("next_week", "Next week")
+                         actionButton("next_week", "Next week"),
+                         checkboxInput("merge_toggle_weekly", label = "Merge results", value = FALSE)
                        ),
                        
                        # Only show when Cumulative selected
                        conditionalPanel(
                          condition = "input.radio_btn === 'Cumulative'",
                          dateInput("start_date_cumulative", label = "Select Start Date", value = Sys.Date() - 30, weekstart = 1),
-                         dateInput("end_date_cumulative", label = "Select End Date", value = Sys.Date(), weekstart = 1)
+                         dateInput("end_date_cumulative", label = "Select End Date", value = Sys.Date(), weekstart = 1),
+                         checkboxInput("merge_toggle_cumulative", label = "Merge results", value = FALSE)
                        )
-                ),
-                column(8,
-                       # Only show when Weekly selected
-                       conditionalPanel(
-                         condition = "input.radio_btn === 'Weekly'",
-                         h4("Weekly Output", style = "margin-top: 20px;"),
+                     )
+                   ),
+                   column(
+                     width = 8,
+                     # Only show when Weekly selected
+                     conditionalPanel(
+                       condition = "input.radio_btn === 'Weekly'",
+                       box(
+                         title = "7 Days heatmap",
+                         width = NULL,
                          uiOutput("output_week")
-                       ),
-                       
-                       # Only show when Cumulative selected
-                       conditionalPanel(
-                         condition = "input.radio_btn === 'Cumulative'",
-                         h4("Cumulative Output", style = "margin-top: 20px;"),
+                       )
+                     ),
+                     
+                     # Only show when Cumulative selected
+                     conditionalPanel(
+                       condition = "input.radio_btn === 'Cumulative'",
+                       box(
+                         title = "Cumulative heatmap",
+                         width = NULL,
                          uiOutput("output_cumulative")
                        )
-                )
+                     )
+                   )
               )
       ),
       
@@ -204,6 +222,10 @@ server <- function(input, output, session) {
     req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
     plots <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
     
+    if (input$merge_toggle_weekly) {
+      merge_heatmaps(plots)
+    }
+    
     lapply(seq_along(plots), function(i) {
       output[[paste("plot", i, sep="_")]] <- renderPlotly({
         return(plots[[i]])
@@ -215,6 +237,10 @@ server <- function(input, output, session) {
     req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
     if (as.Date(input$start_date_cumulative) <= as.Date(input$end_date_cumulative)) {
       plots <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
+      
+      if (input$merge_toggle_cumulative) {
+        merge_heatmaps(plots)
+      }
       
       lapply(seq_along(plots), function(i) {
         output[[paste("cumulative_plot", i, sep="_")]] <- renderPlotly({
@@ -231,13 +257,16 @@ server <- function(input, output, session) {
     
     plot_output_list <- lapply(seq_along(plots), function(i) {
       plotName <- paste("plot", i, sep="_")
-      plotlyOutput(plotName, height = "300px")
+      div(
+        plotlyOutput(plotName, height = "300px"),
+        style = "margin-bottom: 20px;"  # Add a bottom margin of 20 pixels
+      )
     })
-    
+
     # Return a list of plot outputs
     do.call(tagList, plot_output_list)
   })
-  
+
   # Render the heatmap for the "Cumulative" tab
   output$output_cumulative <- renderUI({
     req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
@@ -245,8 +274,11 @@ server <- function(input, output, session) {
       plots <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
 
       plot_output_list <- lapply(seq_along(plots), function(i) {
-        plotName <- paste("cumulative_plot", i, sep="_")
-        plotlyOutput(plotName, height = "300px")
+        plotName <- paste("plot", i, sep="_")
+        div(
+          plotlyOutput(plotName, height = "300px"),
+          style = "margin-bottom: 20px;"  # Add a bottom margin of 20 pixels
+        )
       })
       
       # Return a list of plot outputs

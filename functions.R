@@ -59,9 +59,6 @@ create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
   return(plot_list)
 }
 
-
-
-
 create_heatmap_for_week <- function(data, start_date, agents) {
   start_date <- as.Date(start_date)
   end_date <- start_date + 6
@@ -121,6 +118,25 @@ create_heatmap_for_week <- function(data, start_date, agents) {
   }
   
   return(plot_list)
+}
+
+merge_heatmaps <- function(data_frames) {
+  # Loop through each data frame object
+  lapply(data_frames, function(df) {
+    # Assuming `df` is a data frame like `event_counts` with DAY_OF_WEEK and HOUR as the dimensions
+    # Convert it to a matrix format for visualization or further processing
+    
+    # Pivot the data frame to a matrix format where rows are DAYS and columns are HOURS
+    matrix_data <- tidyr::pivot_wider(df, names_from = HOUR, values_from = Count, values_fill = list(Count = 0)) %>%
+      dplyr::select(-DAY_OF_WEEK) %>%
+      as.matrix()
+    
+    # Print the matrix to console
+    print(matrix_data)
+    
+    # Optionally return something, if needed for further processing
+    return(matrix_data)
+  })
 }
 
 generate_heatmaps_for_top_weeks <- function(data, n_weeks, day_names) {
@@ -237,7 +253,7 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
     # Add to surge periods data frame
     if(length(surge_hours) > 0) {
       for(i in surge_hours) {
-        surge_periods <- rbind(surge_periods, data.frame(Start = i - hours(1), End = i + hours(1), Filter = val))
+        surge_periods <- rbind(surge_periods, data.frame(Start = i - hours(1), End = i + lubridate::hour, Filter = val))
       }
     }
     

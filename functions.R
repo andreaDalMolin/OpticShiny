@@ -25,6 +25,7 @@ create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
   end_date <- as.Date(end_date)
   
   plot_list <- list()
+  data_list <- list()
   
   for (agent in agents) {
     agent_data <- if (agent != '') {
@@ -44,26 +45,31 @@ create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
     event_counts$DAY_OF_WEEK <- factor(event_counts$DAY_OF_WEEK, levels = 7:1, labels = c("Sunday", "Saturday", "Friday", "Thursday", "Wednesday", "Tuesday", "Monday"))
     
     # Create the heatmap plot
-    p <- ggplot2::ggplot(event_counts, ggplot2::aes(x = HOUR, y = DAY_OF_WEEK, fill = Count)) + 
-      ggplot2::geom_tile() +
-      ggplot2::scale_fill_gradient(low = "lightblue", high = "darkblue") +
-      ggplot2::labs(title = paste(agent, "- Number of Alarms by Hour and Day of the Week"), 
+    p <- ggplot(event_counts, aes(x = HOUR, y = DAY_OF_WEEK, fill = Count)) + 
+      geom_tile() +
+      scale_fill_gradient(low = "lightblue", high = "darkblue") +
+      labs(title = paste(agent, "- Number of Alarms by Hour and Day of the Week"), 
                     x = "Hour of the Day", 
                     y = "Day of the Week", 
                     fill = "Number of Events") +
-      ggplot2::theme_minimal()
+      theme_minimal()
     
     plot_list[[agent]] <- p
+    data_list[[agent]] <- event_counts
   }
   
-  return(plot_list)
+  heatmap_data <- list(plot_list = plot_list, data_list = data_list)
+  
+  return(heatmap_data)
 }
+
 
 create_heatmap_for_week <- function(data, start_date, agents) {
   start_date <- as.Date(start_date)
   end_date <- start_date + 6
-
+  
   plot_list <- list()
+  data_list <- list()
   
   for (agent in agents) {
     agent_data <- if (agent != '') {
@@ -102,40 +108,30 @@ create_heatmap_for_week <- function(data, start_date, agents) {
       geom_tile() +
       scale_x_continuous(breaks = 0:23, labels = sprintf("%02d", 0:23)) +
       scale_fill_gradientn(colors = c("#FFFFFF00", "lightblue", "darkblue"),
-                                    values = scales::rescale(c(0, 1, max(event_counts$Count, na.rm = TRUE))),
-                                    na.value = "#FFFFFF00") +
+                           values = scales::rescale(c(0, 1, max(event_counts$Count, na.rm = TRUE))),
+                           na.value = "#FFFFFF00") +
       labs(title = sprintf("%s - Alarms from %s to %s - Number of Alarms by Hour and Day",
-                                    agent,
-                                    format(start_date, "%d/%m/%Y"),
-                                    format(end_date, "%d/%m/%Y")),
-                    x = "Hour of the Day",
-                    y = "Date",
-                    fill = "Number of Events") +
+                           agent,
+                           format(start_date, "%d/%m/%Y"),
+                           format(end_date, "%d/%m/%Y")),
+           x = "Hour of the Day",
+           y = "Date",
+           fill = "Number of Events") +
       theme_minimal()
     
-    # Display the plot
     plot_list[[agent]] <- p
+    data_list[[agent]] <- event_counts
   }
   
-  return(plot_list)
+  heatmap_data <- list(plot_list = plot_list, data_list = data_list)
+  
+  return(heatmap_data)
 }
 
 merge_heatmaps <- function(data_frames) {
   # Loop through each data frame object
   lapply(data_frames, function(df) {
-    # Assuming `df` is a data frame like `event_counts` with DAY_OF_WEEK and HOUR as the dimensions
-    # Convert it to a matrix format for visualization or further processing
-    
-    # Pivot the data frame to a matrix format where rows are DAYS and columns are HOURS
-    matrix_data <- tidyr::pivot_wider(df, names_from = HOUR, values_from = Count, values_fill = list(Count = 0)) %>%
-      dplyr::select(-DAY_OF_WEEK) %>%
-      as.matrix()
-    
-    # Print the matrix to console
-    print(matrix_data)
-    
-    # Optionally return something, if needed for further processing
-    return(matrix_data)
+    print(data_frames)
   })
 }
 

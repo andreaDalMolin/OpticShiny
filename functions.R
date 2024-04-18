@@ -128,11 +128,61 @@ create_heatmap_for_week <- function(data, start_date, agents) {
   return(heatmap_data)
 }
 
-merge_heatmaps <- function(data_frames) {
-  # Loop through each data frame object
-  lapply(data_frames, function(df) {
-    print(data_frames)
+# The is_cumulative bool is to differentiate in graphs contruction
+merge_heatmaps <- function(data_frames, is_cumulative) {
+  # TODO Check that all dataframes have the same shape
+
+  
+  # Normalize the Count values of each dataset
+  data_frames <- lapply(data_frames, function(df) {
+    max_count <- max(df$Count, na.rm = TRUE)
+    df$Count <- df$Count / max_count  # Normalize by the maximum count in each dataset
+    df
   })
+  
+  # For each day/hour of day, multiply the value of each agent for that specific day/time
+  # Assuming that all dataframes have exactly the same rows in the same order
+  merged_data <- data_frames[[1]]
+  if (length(data_frames) > 1) {
+    for (i in 2:length(data_frames)) {
+      merged_data$Count <- merged_data$Count * data_frames[[i]]$Count
+    }
+  }
+  
+  p <- NULL
+  
+  if (is_cumulative) {
+    p <- ggplot(merged_data, aes(x = HOUR, y = DAY_OF_WEEK, fill = Count)) + 
+      geom_tile() +
+      scale_fill_gradient(low = "lightblue", high = "darkblue") +
+      labs(title = paste("Merged", "- Number of Alarms by Hour and Day of the Week"), 
+           x = "Hour of the Day", 
+           y = "Day of the Week", 
+           fill = "Number of Events") +
+      theme_minimal()
+  } else {
+    p <- ggplot(merged_data, aes(x = HOUR, y = DAY, fill = Count)) +
+      geom_tile() +
+      scale_x_continuous(breaks = 0:23, labels = sprintf("%02d", 0:23)) +
+      scale_fill_gradientn(colors = c("#FFFFFF00", "lightblue", "darkblue"),
+                           values = scales::rescale(c(0, 1, max(merged_data$Count, na.rm = TRUE))),
+                           na.value = "#FFFFFF00") +
+      labs(title = sprintf("Merged - Alarms from %s to %s - Number of Alarms by Hour and Day",
+                           format(start_date, "%d/%m/%Y"),
+                           format(end_date, "%d/%m/%Y")),
+           x = "Hour of the Day",
+           y = "Date",
+           fill = "Number of Events") +
+      theme_minimal()
+  }
+  
+  print(p)
+  print(typeof(p))
+
+  plot_list <- list()
+  plot_list[["Merged"]] <- p
+  
+  return(plot_list)
 }
 
 generate_heatmaps_for_top_weeks <- function(data, n_weeks, day_names) {
@@ -249,7 +299,7 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
     # Add to surge periods data frame
     if(length(surge_hours) > 0) {
       for(i in surge_hours) {
-        surge_periods <- rbind(surge_periods, data.frame(Start = i - hours(1), End = i + lubridate::hour, Filter = val))
+        surge_periods <- rbind(surge_periods, data.frame(Start = i - hours(1), End = i + hours(1), Filter = val))
       }
     }
     

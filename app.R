@@ -48,45 +48,6 @@ ui <- dashboardPage(
       
       ##### MENU 2 ######
       
-      # tabItem(tabName = "menu2",
-      #         fluidRow(
-      #           column(4,
-      #                  selectizeInput("select_menu2", label = "Select an Agent (or multiple)", choices = unique(data$AGENT), multiple = TRUE),
-      #                  radioButtons("radio_btn", label = "Select Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
-      #                  
-      #                  # Only show when Weekly selected
-      #                  conditionalPanel(
-      #                    condition = "input.radio_btn === 'Weekly'",
-      #                    dateInput("start_date_weekly", label = "Select Start Date", value = Sys.Date(), weekstart = 1),
-      #                    actionButton("prev_week", "Previous week"),
-      #                    actionButton("next_week", "Next week")
-      #                  ),
-      #                  
-      #                  # Only show when Cumulative selected
-      #                  conditionalPanel(
-      #                    condition = "input.radio_btn === 'Cumulative'",
-      #                    dateInput("start_date_cumulative", label = "Select Start Date", value = Sys.Date() - 30, weekstart = 1),
-      #                    dateInput("end_date_cumulative", label = "Select End Date", value = Sys.Date(), weekstart = 1)
-      #                  )
-      #           ),
-      #           column(8,
-      #                  # Only show when Weekly selected
-      #                  conditionalPanel(
-      #                    condition = "input.radio_btn === 'Weekly'",
-      #                    h4("Weekly Output", style = "margin-top: 20px;"),
-      #                    uiOutput("output_week")
-      #                  ),
-      #                  
-      #                  # Only show when Cumulative selected
-      #                  conditionalPanel(
-      #                    condition = "input.radio_btn === 'Cumulative'",
-      #                    h4("Cumulative Output", style = "margin-top: 20px;"),
-      #                    uiOutput("output_cumulative")
-      #                  )
-      #           )
-      #         )
-      # ),
-      
       tabItem(tabName = "menu2",
               fluidRow(
                 column(
@@ -245,6 +206,8 @@ server <- function(input, output, session) {
   })
   
   ###### MENU 2 ######
+  
+  heatmap_plots <- reactiveValues(weeklyPlots = NULL, cumulativePlots = NULL)
 
   # Function to update the start week and refresh the plot for "Per week"
   observeEvent(input$prev_week, {
@@ -260,10 +223,17 @@ server <- function(input, output, session) {
   observe({
     req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
     heatmap_data <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
+    heatmap_plots$weeklyPlots <- heatmap_data$plot_list
     
-    lapply(seq_along(heatmap_data$plot_list), function(i) {
+    if (input$merge_toggle_weekly) {
+      heatmap_plots$weeklyPlots <- merge_heatmaps(heatmap_data$data_list, FALSE)
+    } else {
+      heatmap_plots$weeklyPlots <- heatmap_data$plot_list
+    }
+    
+    lapply(seq_along(heatmap_plots$weeklyPlots), function(i) {
       output[[paste("plot", i, sep="_")]] <- renderPlotly({
-        return(heatmap_data$plot_list[[i]])
+        return(heatmap_plots$weeklyPlots[[i]])
       })
     })
   })
@@ -272,21 +242,27 @@ server <- function(input, output, session) {
     req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
     if (as.Date(input$start_date_cumulative) <= as.Date(input$end_date_cumulative)) {
       heatmap_data <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
+      heatmap_plots$cumulativePlots <- heatmap_data$plot_list
       
-      lapply(seq_along(heatmap_data$plot_list), function(i) {
+      if (input$merge_toggle_cumulative) {
+        heatmap_plots$cumulativePlots <- merge_heatmaps(heatmap_data$data_list, TRUE)
+      } else {
+        heatmap_plots$cumulativePlots <- heatmap_data$plot_list
+      }
+      
+      lapply(seq_along(heatmap_plots$cumulativePlots), function(i) {
         output[[paste("cumulative_plot", i, sep="_")]] <- renderPlotly({
-          return(heatmap_data$plot_list[[i]])
+          return(heatmap_plots$cumulativePlots[[i]])
         })
       })
     }
   })
-  
+
   # Render the heatmap for the "Per week" tab
   output$output_week <- renderUI({
     req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
-    heatmap_data <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
     
-    plot_output_list <- lapply(seq_along(heatmap_data$plot_list), function(i) {
+    plot_output_list <- lapply(seq_along(heatmap_plots$weeklyPlots), function(i) {
       plotName <- paste("plot", i, sep="_")
       plotlyOutput(plotName, height = "300px")
     })
@@ -299,9 +275,8 @@ server <- function(input, output, session) {
   output$output_cumulative <- renderUI({
     req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
     if (as.Date(input$start_date_cumulative) <= as.Date(input$end_date_cumulative)) {
-      heatmap_data <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
       
-      plot_output_list <- lapply(seq_along(heatmap_data$plot_list), function(i) {
+      plot_output_list <- lapply(seq_along(heatmap_plots$cumulativePlots), function(i) {
         plotName <- paste("cumulative_plot", i, sep="_")
         plotlyOutput(plotName, height = "300px")
       })
@@ -312,7 +287,7 @@ server <- function(input, output, session) {
       showNotification("Start date must be before end date!", type = "error")
     }
   })
-  
+
   
   ###### MENU 3 ######
   
@@ -423,11 +398,11 @@ server <- function(input, output, session) {
     start_datetime <- paste(input$start_date_menu6, input$start_time_menu6)
     # Combine the date and end time into a single datetime string
     end_datetime <- paste(input$end_date_menu6, input$end_time_menu6)
-    
+
     # Format the datetime strings
     start_datetime_formatted <- format(as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     end_datetime_formatted <- format(as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
-    
+
     result <- do.call(create_line_plot_alarm, 
                     list(data = data, 
                          start_datetime = start_datetime_formatted, 

@@ -51,13 +51,13 @@ ui <- dashboardPage(
       tabItem(tabName = "menu2",
               fluidRow(
                 column(
-                  width = 4,
+                  width = 2,
                   shinydashboard::box(
                     title = "Filters",
                     width = NULL,
                     selectizeInput("select_menu2", label = "Select an Agent (or multiple)", choices = unique(data$AGENT), multiple = TRUE),
                     radioButtons("radio_btn", label = "Select Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
-                    
+
                     # Only show when Weekly selected
                     conditionalPanel(
                       condition = "input.radio_btn === 'Weekly'",
@@ -77,7 +77,7 @@ ui <- dashboardPage(
                   )
                 ),
                 column(
-                  width = 8,
+                  width = 10,
                   # Only show when Weekly selected
                   conditionalPanel(
                     condition = "input.radio_btn === 'Weekly'",
@@ -151,22 +151,45 @@ ui <- dashboardPage(
       ),
       
       ##### MENU 6 ######
-      
+
       tabItem(tabName = "menu6",
               fluidRow(
                 column(2,
-                       selectizeInput("select_menu6", label = "Select an Agent", choices = unique(data$AGENT), multiple = TRUE),
-                       dateInput("start_date_menu6", label = "Select Start Date", value = "2024-02-01"),
-                       textInput("start_time_menu6", label = "Enter Start Time (HH:MM)", value = "00:00"),
-                       dateInput("end_date_menu6", label = "Select End Date", value = "2024-02-02"),
-                       textInput("end_time_menu6", label = "Enter End Time (HH:MM)", value = "00:00"),
-                       checkboxInput("alarm_toggle_menu6", label = "Toggle surges", value = TRUE),
-                       sliderInput("slider_menu6", label = "Alarm Sensitivity", min = 0.1, max = 25, value = 1.5),
-                       textOutput("overlapping_nb")
+                   shinydashboard::box(
+                     title = "Filters",
+                     width = NULL,
+                     selectizeInput("select_menu6", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
+                     hr(),
+                     h4("Timeframe"),
+                     dateInput("start_date_menu6", label = "Start Date", value = "2024-02-01"),
+                     textInput("start_time_menu6", label = "Start Time (HH:MM)", value = "00:00"),
+                     dateInput("end_date_menu6", label = "End Date", value = "2024-02-02"),
+                     textInput("end_time_menu6", label = "End Time (HH:MM)", value = "00:00"),
+                     hr(),
+                     radioButtons("alarm_toggle_menu6", label = h4("Surges"),
+                                  choices = list("No surges" = 1, "Common surges" = 2, "All surges" = 3), 
+                                  selected = 1),
+                     sliderInput("slider_menu6", label = "Surge sensitivity", min = 0.1, max = 25, value = 1.5),
+                     textOutput("overlapping_nb")
+                   )
                 ),
                 column(10,
-                       plotlyOutput("menu6_output"),
+                   shinydashboard::box(
+                     title = "Alarm timeline",
+                     width = NULL,
+                     plotlyOutput("menu6_output"),
+                   ),
+                   fluidRow(
+                     shinydashboard::box(
+                       title = "Selected data",
+                       # width = NULL,
                        DTOutput("table_menu6")
+                     ),
+                     shinydashboard::box(
+                       title = "Test"
+                     )
+                     
+                   )
                 )
               )
       )
@@ -444,7 +467,7 @@ server <- function(input, output, session) {
     if (is.null(surges_reactive$data) || nrow(surges_reactive$data) == 0) {
       return("No overlaps found.")
     } else {
-      return(paste("Total number of spikes found:", nrow(surges_reactive$data)))
+      return(paste("Total number of surges found:", nrow(surges_reactive$data)))
     }
   })
 }

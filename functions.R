@@ -19,7 +19,6 @@ create_barplot_by_day <- function(data, title_prefix) {
     theme_minimal()
 }
 
-
 create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
   start_date <- as.Date(start_date)
   end_date <- as.Date(end_date)
@@ -62,7 +61,6 @@ create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
   
   return(heatmap_data)
 }
-
 
 create_heatmap_for_week <- function(data, start_date, agents) {
   start_date <- as.Date(start_date)
@@ -337,7 +335,7 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
     geom_point(aes(y = Count), alpha = 0.5)
   
   # Highlight surge periods
-  if (drawAlarms) {
+  if (drawAlarms == 3) {
     for(surge in unique(surge_periods$Filter)) {
       surge_data <- surge_periods[surge_periods$Filter == surge,]
       for(i in 1:nrow(surge_data)) {
@@ -348,6 +346,8 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
                                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
       }
     }
+  } else if (drawAlarms == 2) {
+    
   }
   
   print("SURGES FOUND")

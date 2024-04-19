@@ -328,13 +328,18 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
   ymin_val <- ymin_val - padding
   ymax_val <- ymax_val + padding
   
-  # Create the base plot with rolling averages and deviation ribbons
+  # Base plot with rolling averages and deviation ribbons
   plot <- ggplot(all_hourly_counts, aes(x = Hour, y = Avg, group = Filter, color = Filter)) +
     geom_line() +
     geom_ribbon(aes(ymin = Avg - StdDev, ymax = Avg + StdDev, fill = Filter), alpha = 0.2) +
     geom_point(aes(y = Count), alpha = 0.5)
   
-  # Highlight surge periods
+  # Retrieve overlapping surges data
+  overlapping_surges <- find_overlapping_alarms(surge_periods = surge_periods)
+  print(str(overlapping_surges))
+  print(str(surge_periods))
+  
+  # Decide how to draw alarms based on the drawAlarms setting
   if (drawAlarms == 3) {
     for(surge in unique(surge_periods$Filter)) {
       surge_data <- surge_periods[surge_periods$Filter == surge,]
@@ -347,14 +352,65 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
       }
     }
   } else if (drawAlarms == 2) {
-    
+    # Draw rectangles only on overlapping alarms
+    plot <- plot + geom_rect(data = overlapping_surges,
+                             aes(xmin = OverlapStart, xmax = OverlapEnd,
+                                 ymin = ymin_val, ymax = ymax_val, fill = Agent1),
+                             alpha = 0.3, inherit.aes = FALSE)
   }
   
-  print("SURGES FOUND")
-  print(surge_periods)
+  # Display the plot
+  print(plot)
   
   return(list(plot = plot, surges = surge_periods))
 }
+
+find_overlapping_alarms <- function(surge_periods) {
+  surge_periods <- surge_periods[order(surge_periods$Start),]
+  
+  overlap_info <- data.frame(
+    Agent1 = character(),
+    Agent2 = character(),
+    OverlapStart = as.POSIXct(character()),
+    OverlapEnd = as.POSIXct(character()),
+    stringsAsFactors = FALSE
+  )
+  
+  for (i in 1:nrow(surge_periods)) {
+    current_period <- surge_periods[i,]
+    
+    # Find potential overlaps
+    potential_overlaps <- surge_periods[surge_periods$Start <= current_period$End,]
+    
+    for (j in 1:nrow(potential_overlaps)) {
+      other_period <- potential_overlaps[j,]
+      
+      # Check for actual overlap
+      if (other_period$End >= current_period$Start && other_period$Filter != current_period$Filter) {
+        
+        # Sort agents to ensure consistency in how overlaps are recorded
+        agents <- sort(c(current_period$Filter, other_period$Filter))
+        
+        # Create a potential new overlap entry
+        new_overlap <- data.frame(
+          Agent1 = agents[1],
+          Agent2 = agents[2],
+          OverlapStart = max(current_period$Start, other_period$Start),
+          OverlapEnd = min(current_period$End, other_period$End),
+          stringsAsFactors = FALSE
+        )
+        
+        # Check if this overlap is already recorded
+        if (!any(apply(overlap_info, 1, function(x) all(x == new_overlap)))) {
+          overlap_info <- rbind(overlap_info, new_overlap)
+        }
+      }
+    }
+  }
+  
+  return(overlap_info)
+}
+
 
 fetch_alarm_table_data <- function(data, start_datetime, end_datetime, ...) {
   agents <- unlist(list(...))
@@ -366,51 +422,9 @@ fetch_alarm_table_data <- function(data, start_datetime, end_datetime, ...) {
   return(filtered_data)
 }
 
-find_overlapping_alarms <- function(surge_periods) {
-  surge_periods <- surge_periods[order(surge_periods$Start),]
-  
-  overlap_info <- list()
-  
-  for (i in 1:nrow(surge_periods)) {
-    current_period <- surge_periods[i,]
-    
-    # Find potential overlaps
-    potential_overlaps <- surge_periods[surge_periods$Start <= current_period$End,]
-    
-    for (j in 1:nrow(potential_overlaps)) {
-      other_period <- potential_overlaps[j,]
-      
-      # Check for actual overlap and that it's not the same agent or the same period
-      if (other_period$End >= current_period$Start && other_period$Filter != current_period$Filter) {
-        
-        # Sort agents to ensure consistency in how overlaps are recorded
-        agents <- sort(c(current_period$Filter, other_period$Filter))
-        
-        # Create a potential new overlap entry
-        new_overlap <- list(
-          Agent1 = agents[1],
-          Agent2 = agents[2],
-          OverlapStart = max(current_period$Start, other_period$Start),
-          OverlapEnd = min(current_period$End, other_period$End)
-        )
-        
-        # Check if this overlap is already recorded
-        already_recorded <- any(sapply(overlap_info, function(oi) {
-          identical(oi, new_overlap)
-        }))
-        
-        # If not already recorded, add to the list
-        if (!already_recorded) {
-          overlap_info <- c(overlap_info, list(new_overlap))
-        }
-      }
-    }
-  }
-  
-  print(overlap_info)
-  
-  return(overlap_info)
-}
+
+###### UNUSED   ###### 
+
 
 plot_missing_data <- function(data) {
   # Identify columns that are not date or time to avoid conversion issues
@@ -470,26 +484,4 @@ plot_timeline_for_agent <- function(data, start_time, end_time) {
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
   
   print(p)
-}
-
-find_related_alarms <- function(data, alarm_identifier, alarm_date, agent = NULL, timeframe = NULL) {
-  # Input validation could be added here
-  
-  # Placeholder for the function logic to filter or manipulate the 'data' dataframe
-  # based on the provided parameters.
-  
-  # Example:
-  # if (!is.null(agent)) {
-  #   data <- data[data$agent_column_name == agent, ]
-  # }
-  #
-  # if (!is.null(timeframe)) {
-  #   # Code to filter alarms within the specified 'timeframe' around 'alarm_date'
-  # }
-  #
-  # Filter 'data' to find related alarms based on 'alarm_identifier' and other conditions
-  # result <- data[data$alarm_identifier_column == alarm_identifier, ]
-  
-  # Return the filtered dataframe or any other result you decide to generate
-  # return(result)
 }

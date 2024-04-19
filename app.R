@@ -163,7 +163,7 @@ ui <- dashboardPage(
                      h4("Timeframe"),
                      dateInput("start_date_menu6", label = "Start Date", value = "2024-02-01"),
                      textInput("start_time_menu6", label = "Start Time (HH:MM)", value = "00:00"),
-                     dateInput("end_date_menu6", label = "End Date", value = "2024-02-02"),
+                     dateInput("end_date_menu6", label = "End Date", value = "2024-02-05"),
                      textInput("end_time_menu6", label = "End Time (HH:MM)", value = "00:00"),
                      hr(),
                      radioButtons("alarm_toggle_menu6", label = h4("Surges"),
@@ -390,8 +390,6 @@ server <- function(input, output, session) {
     start_datetime_formatted <- format(as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     end_datetime_formatted <- format(as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     
-    print(start_datetime_formatted)
-    
     # Use the formatted datetime strings in your function call
     plot <- plot_timeline_for_agent(data, start_datetime_formatted, end_datetime_formatted)
     
@@ -441,27 +439,30 @@ server <- function(input, output, session) {
   })
   
   output$table_menu6 <- renderDT({
-    overlapping_table <- find_overlapping_alarms(surges_reactive$data)
+    # Assuming surges_reactive$data is your input data for finding overlaps
+    overlapping_df <- find_overlapping_alarms(surges_reactive$data)
     
-    if (length(overlapping_table) > 0) {
-      overlapping_df <- do.call(rbind, lapply(overlapping_table, function(x) {
-        row_df <- data.frame(t(unlist(x)), stringsAsFactors = FALSE)
-
-        # Convert UNIX timestamps to date-time format
-        row_df[,3] <- as.POSIXct(as.numeric(row_df[,3]), origin = "1970-01-01", tz = "UTC")
-        row_df[,4] <- as.POSIXct(as.numeric(row_df[,4]), origin = "1970-01-01", tz = "UTC")
-        
-        return(row_df)
-      }))
-      colnames(overlapping_df) <- c("Agent", "Overlaps with", "Overlap start", "Overlap end")
-      
+    # Check if the dataframe has any rows
+    if (nrow(overlapping_df) > 0) {
+      # Optionally, you can format the datetime columns here if needed, 
+      # but it seems your function might already handle datetime formatting correctly.
+      colnames(overlapping_df) <- c("Agent1", "Agent2", "Overlap Start", "Overlap End")
     } else {
       # Create an empty dataframe with the same columns if no overlaps are found
-      overlapping_df <- data.frame(Agent1 = character(), Agent2 = character(), OverlapStart = as.POSIXct(character()), OverlapEnd = as.POSIXct(character()), stringsAsFactors = FALSE)
+      overlapping_df <- data.frame(
+        Agent1 = character(),
+        Agent2 = character(),
+        OverlapStart = as.POSIXct(character()),
+        OverlapEnd = as.POSIXct(character()),
+        stringsAsFactors = FALSE
+      )
+      colnames(overlapping_df) <- c("Agent1", "Agent2", "Overlap Start", "Overlap End")
     }
     
+    # Render the DataTable
     datatable(overlapping_df, options = list(pageLength = 5))
   })
+  
   
   output$overlapping_nb <- renderText({
     if (is.null(surges_reactive$data) || nrow(surges_reactive$data) == 0) {

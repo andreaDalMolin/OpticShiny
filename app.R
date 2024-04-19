@@ -182,11 +182,11 @@ ui <- dashboardPage(
                    fluidRow(
                      shinydashboard::box(
                        title = "Selected data",
-                       # width = NULL,
                        DTOutput("table_menu6")
                      ),
                      shinydashboard::box(
-                       title = "Test"
+                       title = "RC-GPT" # Root Cause - Global Problem Tracker ;)
+                       
                      )
                      
                    )

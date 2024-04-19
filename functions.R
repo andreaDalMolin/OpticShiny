@@ -257,23 +257,22 @@ create_agent_alarm_bar_plot <- function(data, start_datetime, end_datetime, top_
   print(p)
 }
 
-create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThreshold, drawAlarms, ...) {
+calculate_surge_periods <- function(data, start_datetime, end_datetime, customThreshold, ...) {
   # Convert start_time and end_time to POSIXct if they are not already
   start_time <- as.POSIXct(start_datetime)
   end_time <- as.POSIXct(end_datetime)
   
   # Extract the ... arguments into a vector
   filter_vals <- c(...)
-
-  # Initialize an empty data frame for the hourly counts
-  all_hourly_counts <- data.frame(Hour = character(), Count = numeric(), Filter = character(), Avg = numeric(), StdDev = numeric())
-  surge_periods <- data.frame(Start = character(), End = character(), Filter = character())
   
   # Filter data for the given time frame
   timeframe_data <- data[data$RAISETIME >= start_time & data$RAISETIME <= end_time, ]
   
+  # Initialize surge periods data frame
+  surge_periods <- data.frame(Start = character(), End = character(), Filter = character())
+  
   for (val in filter_vals) {
-    # Filter and summarize data
+    # Filter and summarize data by hour
     filtered_data <- timeframe_data %>%
       filter(AGENT == val) %>%
       mutate(Hour = floor_date(RAISETIME, "hour")) %>%
@@ -282,17 +281,15 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
       mutate(Filter = val)
     
     # Calculate rolling average and standard deviation
-    window_size <- 3 # Adjust based on your data and needs
+    window_size <- 3
     filtered_data <- filtered_data %>%
       arrange(Hour) %>%
       mutate(Avg = rollapply(Count, width = window_size, FUN = mean, fill = NA, align = "right"),
-             StdDev = rollapply(Count, width = window_size, FUN = sd, fill = NA, align = "right"),
-             Upper = Avg + StdDev, # Upper bound for the ribbon
-             Lower = Avg - StdDev) # Lower bound for the ribbon
+             StdDev = rollapply(Count, width = window_size, FUN = sd, fill = NA, align = "right"))
     
-    # Detect sudden increases - simplistic approach based on Avg change
+    # Detect sudden increases
     surge_detection <- diff(filtered_data$Avg) > customThreshold
-    surge_hours <- filtered_data$Hour[c(FALSE, surge_detection)] # Shift to align with diff output
+    surge_hours <- filtered_data$Hour[c(FALSE, surge_detection)]
     
     # Add to surge periods data frame
     if(length(surge_hours) > 0) {
@@ -300,14 +297,13 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
         surge_periods <- rbind(surge_periods, data.frame(Start = i - hours(1), End = i + hours(1), Filter = val))
       }
     }
-    
-    # Combine with previous counts
-    all_hourly_counts <- rbind(all_hourly_counts, filtered_data)
   }
   
+  # Convert to POSIXct
   surge_periods$Start <- as.POSIXct(surge_periods$Start, origin="1970-01-01")
   surge_periods$End <- as.POSIXct(surge_periods$End, origin="1970-01-01")
   
+  # Remove NA values
   surge_periods <- na.omit(surge_periods)
   
   # Merge consecutive surges for each agent
@@ -319,11 +315,42 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
     summarise(Start = first(Start), End = last(End)) %>%
     ungroup()
   
+  return(surge_periods)
+}
+
+
+create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThreshold, drawAlarms, ...) {
+  # Convert start_time and end_time to POSIXct if they are not already
+  start_time <- as.POSIXct(start_datetime)
+  end_time <- as.POSIXct(end_datetime)
+  
+  # Extract the ... arguments into a vector
+  filter_vals <- c(...)
+  
+  # Use the new function to calculate surge periods
+  surge_periods <- calculate_surge_periods(data, start_datetime, end_datetime, customThreshold, ...)
+  
+  # Initialize an empty data frame for the hourly counts
+  all_hourly_counts <- data.frame(Hour = character(), Count = numeric(), Filter = character(), Avg = numeric(), StdDev = numeric())
+  
+  # Continue with the rest of the function, minus the surge period detection code
+  for (val in filter_vals) {
+    # Filter and summarize data
+    filtered_data <- data[data$RAISETIME >= start_time & data$RAISETIME <= end_time & data$AGENT == val, ] %>%
+      mutate(Hour = floor_date(RAISETIME, "hour")) %>%
+      group_by(Hour) %>%
+      summarise(Count = n(), .groups = 'drop') %>%
+      mutate(Filter = val, 
+             Avg = rollapply(Count, width = 3, FUN = mean, fill = NA, align = "right"),
+             StdDev = rollapply(Count, width = 3, FUN = sd, fill = NA, align = "right"))
+    
+    # Combine with previous counts
+    all_hourly_counts <- rbind(all_hourly_counts, filtered_data)
+  }
+  
   # Determine ymin and ymax based on data range
   ymin_val <- min(all_hourly_counts$Avg - all_hourly_counts$StdDev, na.rm = TRUE)
   ymax_val <- max(all_hourly_counts$Avg + all_hourly_counts$StdDev, na.rm = TRUE)
-  
-  # Optionally add padding
   padding <- (ymax_val - ymin_val) * 0.1 # 10% padding
   ymin_val <- ymin_val - padding
   ymax_val <- ymax_val + padding
@@ -359,11 +386,9 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
                              alpha = 0.3, inherit.aes = FALSE)
   }
   
-  # Display the plot
-  print(plot)
-  
   return(list(plot = plot, surges = surge_periods))
 }
+
 
 find_overlapping_alarms <- function(surge_periods) {
   surge_periods <- surge_periods[order(surge_periods$Start),]

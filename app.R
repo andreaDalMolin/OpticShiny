@@ -4,6 +4,7 @@ library(bslib)
 library(plotly)
 library(shinyjs)
 library(DT)
+library(shinycssloaders)
 
 source("global.R")
 source("functions.R")
@@ -185,10 +186,9 @@ ui <- dashboardPage(
                        DTOutput("table_menu6")
                      ),
                      shinydashboard::box(
-                       title = "RC-GPT" # Root Cause - Global Problem Tracker ;)
-                       
-                     )
-                     
+                       title = "RC-GPT", # Root Cause - Global Problem Tracker ;)
+                       actionButton("loadData", "Load Data"),
+                       uiOutput("spinner")                     )
                    )
                 )
               )
@@ -413,6 +413,14 @@ server <- function(input, output, session) {
   
   ###### MENU 6 ######
   
+  output$overlapping_nb <- renderText({
+    if (is.null(surges_reactive$data) || nrow(surges_reactive$data) == 0) {
+      return("No overlaps found.")
+    } else {
+      return(paste("Total number of surges found:", nrow(surges_reactive$data)))
+    }
+  })
+  
   output$menu6_output <- renderPlotly({
     
     # Combine the date and start time into a single datetime string
@@ -463,14 +471,27 @@ server <- function(input, output, session) {
     datatable(overlapping_df, options = list(pageLength = 5))
   })
   
+  observeEvent(input$loadData, {
+    # Trigger the spinner to display by re-rendering the spinner UI component
+    output$spinner <- renderUI({
+      withSpinner(dataTableOutput("surgeDataTable"), color="black")
+    })
   
-  output$overlapping_nb <- renderText({
-    if (is.null(surges_reactive$data) || nrow(surges_reactive$data) == 0) {
-      return("No overlaps found.")
-    } else {
-      return(paste("Total number of surges found:", nrow(surges_reactive$data)))
-    }
+    # Delay rendering to simulate data loading (use your actual data loading process here)
+    output$surgeDataTable <- DT::renderDT({
+      # Make sure to handle your actual input validation and data loading here
+      req(input$start_date_menu6, input$start_time_menu6, input$end_date_menu6, input$end_time_menu6, input$slider_menu6)
+      
+      start_datetime <- format(as.POSIXct(paste(input$start_date_menu6, input$start_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
+      end_datetime <- format(as.POSIXct(paste(input$end_date_menu6, input$end_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
+    
+      surgesPerAgent <- concurrent_surge_agents(data, start_datetime, end_datetime, input$slider_menu6)  # Replace with your data function
+
+      Sys.sleep(3)  # Simulate a delay in data processing
+      DT::datatable(surgesPerAgent, options = list(pageLength = 5))
+    })
   })
+  
 }
 
 # Run the application 

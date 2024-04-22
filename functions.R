@@ -318,7 +318,6 @@ calculate_surge_periods <- function(data, start_datetime, end_datetime, customTh
   return(surge_periods)
 }
 
-
 create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThreshold, drawAlarms, ...) {
   # Convert start_time and end_time to POSIXct if they are not already
   start_time <- as.POSIXct(start_datetime)
@@ -389,7 +388,6 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
   return(list(plot = plot, surges = surge_periods))
 }
 
-
 find_overlapping_alarms <- function(surge_periods) {
   surge_periods <- surge_periods[order(surge_periods$Start),]
   
@@ -436,7 +434,6 @@ find_overlapping_alarms <- function(surge_periods) {
   return(overlap_info)
 }
 
-
 fetch_alarm_table_data <- function(data, start_datetime, end_datetime, ...) {
   agents <- unlist(list(...))
   
@@ -446,6 +443,25 @@ fetch_alarm_table_data <- function(data, start_datetime, end_datetime, ...) {
   
   return(filtered_data)
 }
+
+concurrent_surge_agents <- function(data, start_datetime, end_datetime, customThreshold) {
+  agents <- unique(data$AGENT)
+  
+  surges_summary <- data.frame(Agent = character(), NumSurges = integer(), stringsAsFactors = FALSE)
+  
+  for (agent in agents) {
+    surge_periods <- calculate_surge_periods(data, start_datetime, end_datetime, customThreshold, agent)
+    
+    num_surge_periods <- nrow(surge_periods)
+    
+    surges_summary <- rbind(surges_summary, data.frame(Agent = agent, NumSurges = num_surge_periods))
+  }
+  
+  surges_summary <- surges_summary[order(-surges_summary$NumSurges), ]
+  
+  return(surges_summary)
+}
+
 
 
 ###### UNUSED   ###### 
@@ -510,3 +526,4 @@ plot_timeline_for_agent <- function(data, start_time, end_time) {
   
   print(p)
 }
+

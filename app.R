@@ -24,6 +24,8 @@ ui <- dashboardPage(
     )
   ),
   dashboardBody(
+    tags$div(tags$style(HTML( ".dropdown-menu{z-index:10000 !important;}"))),
+    
     tabItems(
       
       ##### MENU 1 ######
@@ -177,18 +179,26 @@ ui <- dashboardPage(
                 column(10,
                    shinydashboard::box(
                      title = "Alarm timeline",
+                     collapsible = TRUE,
                      width = NULL,
                      plotlyOutput("menu6_output"),
                    ),
                    fluidRow(
                      shinydashboard::box(
-                       title = "Selected data",
+                       title = "Overlapping surges",
+                       status = "primary",
+                       solidHeader = TRUE,
+                       collapsible = TRUE,
                        DTOutput("table_menu6")
                      ),
                      shinydashboard::box(
                        title = "RC-GPT", # Root Cause - Global Problem Tracker ;)
+                       status = "success",
+                       solidHeader = TRUE,
+                       collapsible = TRUE,
                        actionButton("loadData", "Load Data"),
-                       uiOutput("spinner")                     )
+                       uiOutput("spinner")
+                     )
                    )
                 )
               )
@@ -487,7 +497,6 @@ server <- function(input, output, session) {
     
       surgesPerAgent <- concurrent_surge_agents(data, start_datetime, end_datetime, input$slider_menu6)  # Replace with your data function
 
-      Sys.sleep(3)  # Simulate a delay in data processing
       DT::datatable(surgesPerAgent, options = list(pageLength = 5))
     })
   })

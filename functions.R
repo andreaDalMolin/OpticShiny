@@ -258,64 +258,50 @@ create_agent_alarm_bar_plot <- function(data, start_datetime, end_datetime, top_
 }
 
 calculate_surge_periods <- function(data, start_datetime, end_datetime, customThreshold, ...) {
-  # Convert start_time and end_time to POSIXct if they are not already
   start_time <- as.POSIXct(start_datetime)
   end_time <- as.POSIXct(end_datetime)
   
-  # Extract the ... arguments into a vector
   filter_vals <- c(...)
   
-  # Filter data for the given time frame
-  timeframe_data <- data[data$RAISETIME >= start_time & data$RAISETIME <= end_time, ]
+  # Filter data once based on time
+  timeframe_data <- data %>%
+    filter(RAISETIME >= start_time & RAISETIME <= end_time) %>%
+    mutate(Hour = floor_date(RAISETIME, "hour"))
   
-  # Initialize surge periods data frame
-  surge_periods <- data.frame(Start = character(), End = character(), Filter = character())
-  
-  for (val in filter_vals) {
-    # Filter and summarize data by hour
+  # Function to process each agent's data
+  process_agent_data <- function(val) {
     filtered_data <- timeframe_data %>%
       filter(AGENT == val) %>%
-      mutate(Hour = floor_date(RAISETIME, "hour")) %>%
-      group_by(Hour) %>%
-      summarise(Count = n()) %>%
-      mutate(Filter = val)
-    
-    # Calculate rolling average and standard deviation
-    window_size <- 3
-    filtered_data <- filtered_data %>%
+      count(Hour) %>%
+      rename(Count = n) %>%
       arrange(Hour) %>%
-      mutate(Avg = rollapply(Count, width = window_size, FUN = mean, fill = NA, align = "right"),
-             StdDev = rollapply(Count, width = window_size, FUN = sd, fill = NA, align = "right"))
+      mutate(Avg = RcppRoll::roll_mean(Count, 3, fill = NA, align = "right"),
+             StdDev = RcppRoll::roll_sd(Count, 3, fill = NA, align = "right"))
     
-    # Detect sudden increases
-    surge_detection <- diff(filtered_data$Avg) > customThreshold
-    surge_hours <- filtered_data$Hour[c(FALSE, surge_detection)]
+    surge_detection <- which(diff(filtered_data$Avg) > customThreshold)
+    surge_hours <- filtered_data$Hour[surge_detection + 1]
     
-    # Add to surge periods data frame
-    if(length(surge_hours) > 0) {
-      for(i in surge_hours) {
-        surge_periods <- rbind(surge_periods, data.frame(Start = i - hours(1), End = i + hours(1), Filter = val))
-      }
+    if (length(surge_hours) > 0) {
+      tibble(
+        Start = surge_hours - hours(1),
+        End = surge_hours + hours(1),
+        Filter = val
+      )
+    } else {
+      tibble(Start = integer(), End = integer(), Filter = character())
     }
   }
   
-  # Convert to POSIXct
-  surge_periods$Start <- as.POSIXct(surge_periods$Start, origin="1970-01-01")
-  surge_periods$End <- as.POSIXct(surge_periods$End, origin="1970-01-01")
+  # Apply the function to each agent and combine results
+  surge_periods <- map_df(filter_vals, process_agent_data)
   
-  # Remove NA values
-  surge_periods <- na.omit(surge_periods)
-  
-  # Merge consecutive surges for each agent
-  surge_periods <- surge_periods %>%
-    group_by(Filter) %>%
+  # Process merging of consecutive surge periods
+  surge_periods %>%
     arrange(Filter, Start) %>%
+    group_by(Filter) %>%
     mutate(EndGroup = lag(End, default = first(End)) >= Start - minutes(1)) %>%
     group_by(Filter, cumsum(!EndGroup)) %>%
-    summarise(Start = first(Start), End = last(End)) %>%
-    ungroup()
-  
-  return(surge_periods)
+    summarise(Start = first(Start), End = last(End), .groups = 'drop')
 }
 
 create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThreshold, drawAlarms, ...) {
@@ -447,17 +433,26 @@ fetch_alarm_table_data <- function(data, start_datetime, end_datetime, ...) {
 concurrent_surge_agents <- function(data, start_datetime, end_datetime, customThreshold) {
   agents <- unique(data$AGENT)
   
-  surges_summary <- data.frame(Agent = character(), NumSurges = integer(), stringsAsFactors = FALSE)
+  # Pre-allocate a list to collect results
+  surges_summary_list <- vector("list", length(agents))
   
-  for (agent in agents) {
+  # Iterate over agents using lapply or a loop, storing results in the list
+  for (i in seq_along(agents)) {
+    agent <- agents[i]
     surge_periods <- calculate_surge_periods(data, start_datetime, end_datetime, customThreshold, agent)
     
     num_surge_periods <- nrow(surge_periods)
     
-    surges_summary <- rbind(surges_summary, data.frame(Agent = agent, NumSurges = num_surge_periods))
+    # Directly construct each part of the list
+    surges_summary_list[[i]] <- data.frame(Agent = agent, NumSurges = num_surge_periods, stringsAsFactors = FALSE)
   }
   
-  surges_summary <- surges_summary[order(-surges_summary$NumSurges), ]
+  # Combine all results at once
+  surges_summary <- do.call(rbind, surges_summary_list)
+  
+  # Order results
+  surges_summary <- surges_summary %>% 
+    arrange(desc(NumSurges))
   
   return(surges_summary)
 }

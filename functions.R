@@ -288,7 +288,11 @@ calculate_surge_periods <- function(data, start_datetime, end_datetime, customTh
         Filter = val
       )
     } else {
-      tibble(Start = integer(), End = integer(), Filter = character())
+      tibble(
+        Start = as.POSIXct(character()), # Ensure that the column type matches
+        End = as.POSIXct(character()),   # Ensure that the column type matches
+        Filter = character()
+      )
     }
   }
   
@@ -456,6 +460,9 @@ concurrent_surge_agents <- function(data, start_datetime, end_datetime, customTh
   
   return(surges_summary)
 }
+
+
+
 
 
 

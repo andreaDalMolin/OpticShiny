@@ -19,7 +19,6 @@ ui <- dashboardPage(
       menuItem("Heatmap", tabName = "menu2"),
       menuItem("Alarm density", tabName = "menu3"),
       menuItem("Timeline", tabName = "menu4"),
-      menuItem("Correlation map", tabName = "menu5"),
       menuItem("RC Tracker", tabName = "menu6")
     )
   ),
@@ -27,24 +26,34 @@ ui <- dashboardPage(
     tags$div(tags$style(HTML( ".dropdown-menu{z-index:10000 !important;}"))),
     
     tabItems(
-      
+
       ##### MENU 1 ######
       
       tabItem(tabName = "menu1",
               fluidRow(
-                
-                column(4,
-                       shinydashboard::box(
-                         title = "Filters",
-                         dateInput("start_date_menu1", label = "Select Start Date", value = Sys.Date()),
-                         dateInput("end_date_menu1", label = "Select End Date", value = Sys.Date()),
-                         textInput("start_time_menu1", label = "Enter Start Time (HH:MM)", value = "12:00"),
-                         textInput("end_time_menu1", label = "Enter End Time (HH:MM)", value = "12:00"),
-                         selectInput("select_menu1", label = "Select the number of items shown", choices = c(5, 10, 15))
-                       )     
+                column(2,
+                   shinydashboard::box(
+                     title = "Filters",
+                     width = NULL,
+                     status = "primary",
+                     solidHeader = TRUE,
+                     collapsible = TRUE,
+                     h4("Timeframe"),
+                     dateInput("start_date_menu1", label = "Start Date", value = Sys.Date()),
+                     dateInput("end_date_menu1", label = "End Date", value = Sys.Date()),
+                     textInput("start_time_menu1", label = "Start Time (HH:MM)", value = "12:00"),
+                     textInput("end_time_menu1", label = "End Time (HH:MM)", value = "12:00"),
+                   )     
                 ),
-                column(8,
-                       plotlyOutput("menu1_output")
+                column(10,
+                   shinydashboard::box(
+                     title = "Histogram",
+                     status = "info",
+                     solidHeader = TRUE,
+                     collapsible = TRUE,
+                     width = NULL,
+                     plotlyOutput("menu1_output")
+                   )
                 )
               )
       ),
@@ -53,29 +62,35 @@ ui <- dashboardPage(
       
       tabItem(tabName = "menu2",
               fluidRow(
-                column(
-                  width = 2,
+                column(2,
                   shinydashboard::box(
                     title = "Filters",
                     width = NULL,
-                    selectizeInput("select_menu2", label = "Select an Agent (or multiple)", choices = unique(data$AGENT), multiple = TRUE),
-                    radioButtons("radio_btn", label = "Select Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
+                    status = "primary",
+                    solidHeader = TRUE,
+                    collapsible = TRUE,
+                    selectizeInput("select_menu2", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
+                    h4("Heatmap settings"),
+                    radioButtons("radio_btn", label = "Heatmap Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
+                    checkboxInput("merge_toggle", label = "Merge results", value = FALSE),
 
                     # Only show when Weekly selected
                     conditionalPanel(
                       condition = "input.radio_btn === 'Weekly'",
-                      dateInput("start_date_weekly", label = "Select Start Date", value = Sys.Date(), weekstart = 1),
+                      hr(),
+                      h4("Timeframe"),
+                      dateInput("start_date_weekly", label = "Start Date", value = Sys.Date(), weekstart = 1),
                       actionButton("prev_week", "Previous week"),
                       actionButton("next_week", "Next week"),
-                      checkboxInput("merge_toggle_weekly", label = "Merge results", value = FALSE)
                     ),
                     
                     # Only show when Cumulative selected
                     conditionalPanel(
                       condition = "input.radio_btn === 'Cumulative'",
-                      dateInput("start_date_cumulative", label = "Select Start Date", value = Sys.Date() - 30, weekstart = 1),
-                      dateInput("end_date_cumulative", label = "Select End Date", value = Sys.Date(), weekstart = 1),
-                      checkboxInput("merge_toggle_cumulative", label = "Merge results", value = FALSE)
+                      hr(),
+                      h4("Timeframe"),
+                      dateInput("start_date_cumulative", label = "Start Date", value = Sys.Date() - 30, weekstart = 1),
+                      dateInput("end_date_cumulative", label = "End Date", value = Sys.Date(), weekstart = 1),
                     )
                   )
                 ),
@@ -86,7 +101,10 @@ ui <- dashboardPage(
                     condition = "input.radio_btn === 'Weekly'",
                     box(
                       title = "7 Days heatmap",
-                      width = NULL,
+                      status = "info",
+                      solidHeader = TRUE,
+                      collapsible = TRUE,
+                      width = NULL,                      
                       uiOutput("output_week")
                     )
                   ),
@@ -96,6 +114,9 @@ ui <- dashboardPage(
                     condition = "input.radio_btn === 'Cumulative'",
                     box(
                       title = "Cumulative heatmap",
+                      status = "info",
+                      solidHeader = TRUE,
+                      collapsible = TRUE,
                       width = NULL,
                       uiOutput("output_cumulative")
                     )
@@ -109,14 +130,31 @@ ui <- dashboardPage(
       tabItem(tabName = "menu3",
               fluidRow(
                 column(2,
-                       dateInput("start_date_menu3", label = "Select Start Date", value = Sys.Date()),
-                       dateInput("end_date_menu3", label = "Select End Date", value = Sys.Date()),
-                       textInput("start_time_menu3", label = "Enter Start Time (HH:MM)", value = "12:00"),
-                       textInput("end_time_menu3", label = "Enter End Time (HH:MM)", value = "12:00"),
-                       selectInput("select_menu3", label = "Select the number of items shown", choices = c(5, 10, 15))
+                   shinydashboard::box(
+                     title = "Filters",
+                     width = NULL,
+                     status = "primary",
+                     solidHeader = TRUE,
+                     collapsible = TRUE,
+                     selectizeInput("selectize_menu3", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
+                     hr(),
+                     h4("Timeframe"),
+                     dateInput("start_date_menu3", label = "Start Date", value = Sys.Date()),
+                     dateInput("end_date_menu3", label = "End Date", value = Sys.Date()),
+                     textInput("start_time_menu3", label = "Start Time (HH:MM)", value = "12:00"),
+                     textInput("end_time_menu3", label = "End Time (HH:MM)", value = "12:00"),
+                     selectInput("select_menu3", label = "Shown items", choices = c(5, 10, 15))
+                   )
                 ),
-                column(8,
-                       plotlyOutput("menu3_output")
+                column(10,
+                   shinydashboard::box(
+                     title = "Alarms timeline",
+                     status = "info",
+                     solidHeader = TRUE,
+                     collapsible = TRUE,
+                     width = NULL,
+                     plotlyOutput("menu3_output")
+                   )
                 )
               )
       ),
@@ -125,30 +163,31 @@ ui <- dashboardPage(
       
       tabItem(tabName = "menu4",
               fluidRow(
-                column(4,
-                       dateInput("start_date_menu4", label = "Select Start Date", value = Sys.Date()),
-                       dateInput("end_date_menu4", label = "Select End Date", value = Sys.Date()),
-                       textInput("start_time_menu4", label = "Enter Start Time (HH:MM)", value = "12:00"),
-                       textInput("end_time_menu4", label = "Enter End Time (HH:MM)", value = "12:00")
+                column(2,
+                   shinydashboard::box(
+                     title = "Filters",
+                     width = NULL,
+                     status = "primary",
+                     solidHeader = TRUE,
+                     collapsible = TRUE,
+                     selectizeInput("select_menu4", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
+                     hr(),
+                     h4("Timeframe"),
+                     dateInput("start_date_menu4", label = "Start Date", value = Sys.Date()),
+                     dateInput("end_date_menu4", label = "End Date", value = Sys.Date()),
+                     textInput("start_time_menu4", label = "Start Time (HH:MM)", value = "12:00"),
+                     textInput("end_time_menu4", label = "End Time (HH:MM)", value = "12:00")
+                   )
                 ),
-                column(8,
-                       plotlyOutput("menu4_output")
-                )
-              )
-      ),
-      
-      ##### MENU 5 ######
-      
-      tabItem(tabName = "menu5",
-              fluidRow(
-                column(4,
-                       dateInput("start_date_menu5", label = "Select Start Date", value = Sys.Date()),
-                       dateInput("end_date_menu5", label = "Select End Date", value = Sys.Date()),
-                       textInput("start_time_menu5", label = "Enter Start Time (HH:MM)", value = "12:00"),
-                       textInput("end_time_menu5", label = "Enter End Time (HH:MM)", value = "12:00")
-                ),
-                column(8,
-                       plotlyOutput("menu5_output")
+                column(10,
+                    shinydashboard::box(
+                      title = "Alarm timeline",
+                      status = "info",
+                      solidHeader = TRUE,
+                      collapsible = TRUE,
+                      width = NULL,
+                      plotlyOutput("menu4_output")
+                    )
                 )
               )
       ),
@@ -161,6 +200,9 @@ ui <- dashboardPage(
                    shinydashboard::box(
                      title = "Filters",
                      width = NULL,
+                     status = "primary",
+                     solidHeader = TRUE,
+                     collapsible = TRUE,
                      selectizeInput("select_menu6", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
                      hr(),
                      h4("Timeframe"),
@@ -179,25 +221,36 @@ ui <- dashboardPage(
                 column(10,
                    shinydashboard::box(
                      title = "Alarm timeline",
+                     status = "info",
+                     solidHeader = TRUE,
                      collapsible = TRUE,
                      width = NULL,
                      plotlyOutput("menu6_output"),
                    ),
                    fluidRow(
-                     shinydashboard::box(
-                       title = "Overlapping surges",
-                       status = "primary",
-                       solidHeader = TRUE,
-                       collapsible = TRUE,
-                       DTOutput("table_menu6")
+                     tabBox(
+                       title = "Data insight",
+                       tabPanel("Surges overlap", DTOutput("table_menu6")),
+                       tabPanel("Events"),
                      ),
                      shinydashboard::box(
                        title = "RC-GPT", # Root Cause - Global Problem Tracker ;)
                        status = "success",
                        solidHeader = TRUE,
                        collapsible = TRUE,
-                       actionButton("loadData", "Load Data"),
-                       uiOutput("spinner")
+                       div(
+                         actionButton("loadData", "Load Data", icon = icon("refresh")),
+                         style = "text-align: right;"  # Aligns the button to the right
+                       ),
+                       br(),
+                       DTOutput("surgeDataTable")
+                     ),
+                     shinydashboard::box(
+                       title = "Historical data", # Root Cause - Global Problem Tracker ;)
+                       status = "warning",
+                       solidHeader = TRUE,
+                       collapsible = TRUE,
+                       
                      )
                    )
                 )
@@ -258,7 +311,7 @@ server <- function(input, output, session) {
     heatmap_data <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
     heatmap_plots$weeklyPlots <- heatmap_data$plot_list
     
-    if (input$merge_toggle_weekly) {
+    if (input$merge_toggle) {
       heatmap_plots$weeklyPlots <- merge_heatmaps(heatmap_data$data_list, FALSE)
     } else {
       heatmap_plots$weeklyPlots <- heatmap_data$plot_list
@@ -277,7 +330,7 @@ server <- function(input, output, session) {
       heatmap_data <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
       heatmap_plots$cumulativePlots <- heatmap_data$plot_list
       
-      if (input$merge_toggle_cumulative) {
+      if (input$merge_toggle) {
         heatmap_plots$cumulativePlots <- merge_heatmaps(heatmap_data$data_list, TRUE)
       } else {
         heatmap_plots$cumulativePlots <- heatmap_data$plot_list
@@ -480,28 +533,48 @@ server <- function(input, output, session) {
     # Render the DataTable
     datatable(overlapping_df, options = list(pageLength = 5))
   })
+
+  # Initialize the data table with a message or empty structure
+  output$surgeDataTable <- renderDT({
+    datatable(data.frame(
+      "Agent" = character(),
+      "Number of surges" = character()
+    ), options = list(pageLength = 5, 
+                      language = list(emptyTable = "No data loaded. Click 'Load Data' to display results.")))
+  })
   
   observeEvent(input$loadData, {
-    # Trigger the spinner to display by re-rendering the spinner UI component
-    output$spinner <- renderUI({
-      withSpinner(dataTableOutput("surgeDataTable"), color="black")
-    })
-  
-    # Delay rendering to simulate data loading (use your actual data loading process here)
-    output$surgeDataTable <- DT::renderDT({
-      # Make sure to handle your actual input validation and data loading here
-      req(input$start_date_menu6, input$start_time_menu6, input$end_date_menu6, input$end_time_menu6, input$slider_menu6)
-      
-      start_datetime <- format(as.POSIXct(paste(input$start_date_menu6, input$start_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
-      end_datetime <- format(as.POSIXct(paste(input$end_date_menu6, input$end_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
+    # Validate necessary inputs
+    req(input$start_date_menu6, input$start_time_menu6, input$end_date_menu6, input$end_time_menu6, input$slider_menu6)
     
-      surgesPerAgent <- concurrent_surge_agents(data, start_datetime, end_datetime, input$slider_menu6)  # Replace with your data function
-
-      DT::datatable(surgesPerAgent, options = list(pageLength = 5))
+    # Prepare data based on input
+    start_datetime <- format(as.POSIXct(paste(input$start_date_menu6, input$start_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
+    end_datetime <- format(as.POSIXct(paste(input$end_date_menu6, input$end_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
+    
+    # Assuming concurrent_surge_agents returns a dataframe
+    surgesPerAgent <- concurrent_surge_agents(data, start_datetime, end_datetime, input$slider_menu6)
+    output$surgeDataTable <- DT::renderDT({
+      datatable(surgesPerAgent, options = list(pageLength = 5))
     })
   })
   
+  # output$spinner <- renderUI({
+  #   withSpinner(dataTableOutput("surgeDataTable"), color="black")
+  # })
+  # 
+  # output$surgeDataTable <- renderDT({
+  #   # Validate necessary inputs
+  #   req(input$start_date_menu6, input$start_time_menu6, input$end_date_menu6, input$end_time_menu6, input$slider_menu6)
+  #   
+  #   start_datetime <- format(as.POSIXct(paste(input$start_date_menu6, input$start_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
+  #   end_datetime <- format(as.POSIXct(paste(input$end_date_menu6, input$end_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
+  #   
+  #   surgesPerAgent <- concurrent_surge_agents(data, start_datetime, end_datetime, input$slider_menu6)
+  #   
+  #   DT::datatable(surgesPerAgent, options = list(pageLength = 5))
+  # })
+
+
 }
 
-# Run the application 
 shinyApp(ui = ui, server = server)

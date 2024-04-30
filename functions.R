@@ -299,11 +299,18 @@ calculate_surge_periods <- function(data, start_datetime, end_datetime, customTh
   # Apply the function to each agent and combine results
   surge_periods <- map_df(filter_vals, process_agent_data)
   
-  # Process merging of consecutive surge periods
+  # Ensure there is a fallback value for End if no data is present
+  default_end_value <- if (nrow(timeframe_data) == 0 || all(is.na(timeframe_data$End))) {
+    as.POSIXct("1970-01-01 00:00:00") # This is the fallback date when no data is present
+  } else {
+    first(timeframe_data$End) # The first valid End value in the data
+  }
+  
+  # Modify the mutate call to handle potentially empty data
   surge_periods %>%
     arrange(Filter, Start) %>%
     group_by(Filter) %>%
-    mutate(EndGroup = lag(End, default = first(End)) >= Start - minutes(1)) %>%
+    mutate(EndGroup = lag(End, default = default_end_value) >= Start - minutes(1)) %>%
     group_by(Filter, cumsum(!EndGroup)) %>%
     summarise(Start = first(Start), End = last(End), .groups = 'drop')
 }
@@ -461,8 +468,86 @@ concurrent_surge_agents <- function(data, start_datetime, end_datetime, customTh
   return(surges_summary)
 }
 
+analyze_overlaps <- function(agent_name, output_csv = "overlap_details.csv") {
+  
+  #Import surge periods file
+  surge_data <- read.csv("surge_periods.csv")
+  
+  surge_data$Start <- as.POSIXct(surge_data$Start, format = "%d/%m/%Y %H:%M:%S")
+  surge_data$End <- as.POSIXct(surge_data$End, format = "%d/%m/%Y %H:%M:%S")
+  
+  surge_data <- surge_data %>%
+    filter(complete.cases(.))
+  
+  setDT(surge_data)
+  surge_data[, `:=`(Start = as.POSIXct(Start), End = as.POSIXct(End))]
+  
+  agent_surges <- surge_data[Filter == agent_name]
+  other_agents_surges <- surge_data[Filter != agent_name]
+  
+  # Set keys for joining
+  setkey(agent_surges, Start, End)
+  setkey(other_agents_surges, Start, End)
+  
+  # Find overlaps
+  overlaps <- foverlaps(agent_surges, other_agents_surges, type = "any", which = TRUE, nomatch = 0L)
+  if (nrow(overlaps) > 0) {
+    overlaps_result <- agent_surges[overlaps$xid][, .(Filter1 = Filter, Start1 = Start, End1 = End)]
+    overlaps_other <- other_agents_surges[overlaps$yid][, .(Filter2 = Filter, Start2 = Start, End2 = End)]
+    final_overlaps <- cbind(overlaps_result, overlaps_other)
+    fwrite(final_overlaps, output_csv)
+    return(final_overlaps)
+  } else {
+    return(NULL)
+  }
+}
+
+myoverlaps <- analyze_overlaps("EMMA")
+
+customSurges <- read.csv("surge_periods.csv")
+
+customSurges$Start <- as.POSIXct(customSurges$Start, format = "%d/%m/%Y %H:%M:%S")
+customSurges$End <- as.POSIXct(customSurges$End, format = "%d/%m/%Y %H:%M:%S")
 
 
+# NA count per column
+na_count_per_column <- colSums(is.na(customSurges))
+
+# Display the NA counts for each column
+print(na_count_per_column)
+
+# Check the result
+str(customSurges)
+
+rows_with_end_before_start <- customSurges[customSurges$End < customSurges$Start, ]
+
+# View these rows
+print(rows_with_end_before_start)
+
+
+# TODO : make this auto run every day and incrementally add to existing data
+calculate_agent_overlap_statistics <- function(data, start_datetime, end_datetime, customThreshold) {
+  agents <- unique(data$AGENT)
+  
+  total_agents <- length(agents)
+  
+  # Initialize an empty list to store surge periods for each agent
+  surge_periods_list <- list()
+  
+  # Calculate surge periods for each agent
+  for (i in seq_along(agents)) {
+    cat(sprintf("Calculating surge periods for agent %d/%d...\n", i, total_agents))
+    # Assuming calculate_surge_periods can handle one agent at a time
+    agent_surge_periods <- calculate_surge_periods(data, start_datetime, end_datetime, customThreshold, agents[i])
+    surge_periods_list[[i]] <- agent_surge_periods
+    cat(sprintf("Completed agent %d/%d.\n", i, total_agents))
+  }
+  
+  # Combine all surge periods into one dataframe
+  surge_periods <- do.call(rbind, surge_periods_list)
+  
+  write.csv(surge_periods, "surge_periods.csv", row.names = FALSE)
+}
 
 
 

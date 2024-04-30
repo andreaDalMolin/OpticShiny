@@ -20,21 +20,14 @@ calculate_agent_overlap_statistics <- function(data, start_datetime, end_datetim
   # Combine all surge periods into one dataframe
   surge_periods <- do.call(rbind, surge_periods_list)
   
+  # Format datetime columns to include both date and time
+  surge_periods$Start <- format(surge_periods$Start, "%d/%m/%Y %H:%M:%S")
+  surge_periods$End <- format(surge_periods$End, "%d/%m/%Y %H:%M:%S")
+  
+  # Now write the formatted surge_periods to CSV
   write.csv(surge_periods, "surge_periods.csv", row.names = FALSE)
   
-  # # Find overlapping alarms among these surge periods
-  # cat("Finding overlapping alarms...\n")
-  # overlaps <- find_overlapping_alarms(surge_periods)
-  # cat("Completed finding overlaps.\n")
-  # 
-  # # Calculate overlap statistics
-  # cat("Calculating overlap statistics...\n")
-  # overlap_statistics <- overlaps %>%
-  #   count(Agent1, Agent2) %>%
-  #   arrange(desc(n))
-  # cat("Completed calculating statistics.\n")
-  # 
-  # return(overlap_statistics)
+  
 }
 
 
@@ -43,7 +36,7 @@ calculate_agent_overlap_statistics <- function(data, start_datetime, end_datetim
 
 
 
-start_datetime <- "2023-01-01 00:00:00"
+start_datetime <- "2024-01-01 00:00:00"
 end_datetime <- "2024-03-31 23:59:59"
 
 overlap_statistics <- calculate_agent_overlap_statistics(data, start_datetime, end_datetime, 1.5)
@@ -104,7 +97,7 @@ analyze_overlaps <- function(surge_data, agent_name, output_csv = "overlap_detai
   
   agent_surges <- surge_data[surge_data$Filter == agent_name,]
   other_agents_surges <- surge_data[surge_data$Filter != agent_name,]
-  
+
   # Initialize a data frame to store individual overlaps
   overlaps <- tibble(Filter1 = character(), Filter2 = character(), Start1 = character(), End1 = character(), Start2 = character(), End2 = character())
   
@@ -132,5 +125,35 @@ analyze_overlaps <- function(surge_data, agent_name, output_csv = "overlap_detai
   return(overlaps)
 }
 
-overlap_details <- analyze_overlaps(surge_data, "EMMA", "overlap_details.csv")
+analyze_overlaps <- function(agent_name, output_csv = "overlap_details.csv") {
+  
+  #Import surge periods file
+  surge_data <- read.csv("surge_periods.csv")
+  
+  setDT(surge_data)
+  surge_data[, `:=` (Start = as.POSIXct(Start, format = "%Y-%m-%d %H:%M:%S"),
+                     End = as.POSIXct(End, format = "%Y-%m-%d %H:%M:%S"))]
+  
+  agent_surges <- surge_data[Filter == agent_name]
+  other_agents_surges <- surge_data[Filter != agent_name]
+  
+  # Set keys for joining by time intervals
+  setkey(agent_surges, Start, End)
+  setkey(other_agents_surges, Start, End)
+  
+  # Find overlaps using foverlaps, which respects the exact times
+  overlaps <- foverlaps(agent_surges, other_agents_surges, type = "any", which = TRUE, nomatch = 0L)
+  if (nrow(overlaps) > 0) {
+    overlaps_result <- agent_surges[overlaps$xid, .(Filter1 = Filter, Start1 = Start, End1 = End)]
+    overlaps_other <- other_agents_surges[overlaps$yid, .(Filter2 = Filter, Start2 = Start, End2 = End)]
+    final_overlaps <- cbind(overlaps_result, overlaps_other)
+    # Write to CSV using fwrite for efficiency
+    fwrite(final_overlaps, output_csv)
+    return(final_overlaps)
+  } else {
+    return(NULL)  # Return NULL if no overlaps found
+  }
+}
+
+overlap_details <- analyze_overlaps("EMMA", "overlap_details.csv")
 

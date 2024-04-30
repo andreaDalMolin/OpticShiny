@@ -70,6 +70,7 @@ ui <- dashboardPage(
                     solidHeader = TRUE,
                     collapsible = TRUE,
                     selectizeInput("select_menu2", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
+                    hr(),
                     h4("Heatmap settings"),
                     radioButtons("radio_btn", label = "Heatmap Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
                     checkboxInput("merge_toggle", label = "Merge results", value = FALSE),
@@ -230,12 +231,21 @@ ui <- dashboardPage(
                    fluidRow(
                      tabBox(
                        title = "Data insight",
-                       tabPanel("Surges overlap", DTOutput("table_menu6")),
-                       tabPanel("Events"),
+                       height = 300,
+                       tabPanel(
+                         "Common surges",
+                         DTOutput("table_menu6")
+                       ),
+                       tabPanel(
+                         "Notable periods",
+                         column(6, DTOutput("mainTable")),
+                         column(6, uiOutput("detailsPanel"))
+                       ),
                      ),
                      shinydashboard::box(
-                       title = "RC-GPT", # Root Cause - Global Problem Tracker ;)
+                       title = "Root Cause Tracker", # Root Cause - Global Problem Tracker ;)
                        status = "success",
+                       height = 300,
                        solidHeader = TRUE,
                        collapsible = TRUE,
                        div(
@@ -246,8 +256,9 @@ ui <- dashboardPage(
                        DTOutput("surgeDataTable")
                      ),
                      shinydashboard::box(
-                       title = "Historical data", # Root Cause - Global Problem Tracker ;)
+                       title = "Historical data",
                        status = "warning",
+                       height = 300,
                        solidHeader = TRUE,
                        collapsible = TRUE,
                        
@@ -510,13 +521,9 @@ server <- function(input, output, session) {
   })
   
   output$table_menu6 <- renderDT({
-    # Assuming surges_reactive$data is your input data for finding overlaps
     overlapping_df <- find_overlapping_alarms(surges_reactive$data)
     
-    # Check if the dataframe has any rows
     if (nrow(overlapping_df) > 0) {
-      # Optionally, you can format the datetime columns here if needed, 
-      # but it seems your function might already handle datetime formatting correctly.
       colnames(overlapping_df) <- c("Agent1", "Agent2", "Overlap Start", "Overlap End")
     } else {
       # Create an empty dataframe with the same columns if no overlaps are found
@@ -530,11 +537,9 @@ server <- function(input, output, session) {
       colnames(overlapping_df) <- c("Agent1", "Agent2", "Overlap Start", "Overlap End")
     }
     
-    # Render the DataTable
     datatable(overlapping_df, options = list(pageLength = 5))
   })
 
-  # Initialize the data table with a message or empty structure
   output$surgeDataTable <- renderDT({
     datatable(data.frame(
       "Agent" = character(),
@@ -558,23 +563,53 @@ server <- function(input, output, session) {
     })
   })
   
-  # output$spinner <- renderUI({
-  #   withSpinner(dataTableOutput("surgeDataTable"), color="black")
-  # })
-  # 
-  # output$surgeDataTable <- renderDT({
-  #   # Validate necessary inputs
-  #   req(input$start_date_menu6, input$start_time_menu6, input$end_date_menu6, input$end_time_menu6, input$slider_menu6)
-  #   
-  #   start_datetime <- format(as.POSIXct(paste(input$start_date_menu6, input$start_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
-  #   end_datetime <- format(as.POSIXct(paste(input$end_date_menu6, input$end_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
-  #   
-  #   surgesPerAgent <- concurrent_surge_agents(data, start_datetime, end_datetime, input$slider_menu6)
-  #   
-  #   DT::datatable(surgesPerAgent, options = list(pageLength = 5))
-  # })
-
-
+  overlap_details <- reactive({
+    req(input$select_menu6)  # Ensure that the input is not NULL or empty
+    if (length(input$select_menu6) > 0) {
+      agent_name <- input$select_menu6[1]  # Use the first selected agent
+      return(analyze_overlaps(agent_name))
+    } else {
+      return(data.frame())  # Return an empty data frame if no selection
+    }
+  })
+  
+  # Main table output
+  output$mainTable <- renderDT({
+    datatable(overlap_details(), selection = 'single', rownames = FALSE, options = list(
+      dom = 't',
+      paging = FALSE,
+      searching = FALSE,
+      info = FALSE
+    ))
+  })
+  
+  # Details panel UI based on selection in the main table
+  output$detailsPanel <- renderUI({
+    if (is.null(input$mainTable_rows_selected)) {
+      div(style = "display: flex; justify-content: center; align-items: center; height: 200px;",
+          h4("No data selected"))
+    } else {
+      dataTableOutput("detailsTable")
+    }
+  })
+  
+  # Details table output showing data related to the selected row in the main table
+  output$detailsTable <- renderDataTable({
+    req(input$mainTable_rows_selected)
+    selectedRow <- input$mainTable_rows_selected
+    detailData <- overlap_details()[
+      Start1 == overlap_details()[selectedRow, Start1] &
+        End1 == overlap_details()[selectedRow, End1], 
+      .(Filter1, Start2, End2)]
+    
+    datatable(detailData, rownames = FALSE, options = list(
+      dom = 't',
+      paging = FALSE,
+      searching = FALSE,
+      ordering = FALSE,
+      info = FALSE
+    ))
+  })
 }
 
 shinyApp(ui = ui, server = server)

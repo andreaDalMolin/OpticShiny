@@ -64,7 +64,7 @@ server <- function(input, output, session) {
       info = FALSE
     ))
   }, server = FALSE)
-
+  
   output$detailsPanel <- renderUI({
     # If no row is selected, show "No data selected" centered horizontally and vertically
     if (is.null(input$mainTable_rows_selected)) {

@@ -26,6 +26,11 @@ create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
   plot_list <- list()
   data_list <- list()
   
+  # Generate a full grid of all days of the week (1-7) and hours (0-23)
+  all_days_of_week <- 1:7
+  all_hours <- 0:23
+  full_grid <- expand.grid(DAY_OF_WEEK = all_days_of_week, HOUR = all_hours)
+  
   for (agent in agents) {
     agent_data <- if (agent != '') {
       data[data$AGENT == agent,]
@@ -35,22 +40,36 @@ create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
     
     timeframe_data <- agent_data[agent_data$RAISETIME >= as.POSIXct(start_date) & agent_data$RAISETIME <= as.POSIXct(paste(end_date, "23:59:59")),]
     
+    # Extract DAY_OF_WEEK and HOUR
+    timeframe_data <- timeframe_data %>%
+      dplyr::mutate(
+        DAY_OF_WEEK = as.integer(format(RAISETIME, "%u")),  # Monday=1, Sunday=7
+        HOUR = as.integer(format(RAISETIME, "%H"))
+      )
+    
     # Count the number of events for each combination of DAY_OF_WEEK and HOUR
     event_counts <- timeframe_data %>%
       dplyr::group_by(DAY_OF_WEEK, HOUR) %>%
       dplyr::summarise(Count = n(), .groups = 'drop')
     
-    # Adjust DAY_OF_WEEK to factor with reversed labels for plotting
+    # Merge with full grid and fill in zeros where there are no events
+    event_counts <- full_grid %>%
+      left_join(event_counts, by = c("DAY_OF_WEEK", "HOUR")) %>%
+      replace_na(list(Count = 0))
+    
+    # Adjust DAY_OF_WEEK to factor with specific labels for plotting
     event_counts$DAY_OF_WEEK <- factor(event_counts$DAY_OF_WEEK, levels = 7:1, labels = c("Sunday", "Saturday", "Friday", "Thursday", "Wednesday", "Tuesday", "Monday"))
     
     # Create the heatmap plot
     p <- ggplot(event_counts, aes(x = HOUR, y = DAY_OF_WEEK, fill = Count)) + 
       geom_tile() +
-      scale_fill_gradient(low = "lightblue", high = "darkblue") +
+      scale_fill_gradientn(colors = c("#FFFFFF00", "lightblue", "darkblue"),
+                           values = scales::rescale(c(0, 1, max(event_counts$Count, na.rm = TRUE))),
+                           na.value = "#FFFFFF00") +
       labs(title = paste(agent, "- Number of Alarms by Hour and Day of the Week"), 
-                    x = "Hour of the Day", 
-                    y = "Day of the Week", 
-                    fill = "Number of Events") +
+           x = "Hour of the Day", 
+           y = "Day of the Week", 
+           fill = "Number of Events") +
       theme_minimal()
     
     plot_list[[agent]] <- p
@@ -502,31 +521,6 @@ analyze_overlaps <- function(agent_name, output_csv = "overlap_details.csv") {
     return(NULL)
   }
 }
-
-myoverlaps <- analyze_overlaps("EMMA")
-
-write.csv(myoverlaps, "myoverlaps.csv", row.names = FALSE)
-
-customSurges <- read.csv("surge_periods.csv")
-
-customSurges$Start <- as.POSIXct(customSurges$Start, format = "%d/%m/%Y %H:%M:%S")
-customSurges$End <- as.POSIXct(customSurges$End, format = "%d/%m/%Y %H:%M:%S")
-
-
-# NA count per column
-na_count_per_column <- colSums(is.na(customSurges))
-
-# Display the NA counts for each column
-print(na_count_per_column)
-
-# Check the result
-str(customSurges)
-
-rows_with_end_before_start <- customSurges[customSurges$End < customSurges$Start, ]
-
-# View these rows
-print(rows_with_end_before_start)
-
 
 # TODO : make this auto run every day and incrementally add to existing data
 calculate_agent_overlap_statistics <- function(data, start_datetime, end_datetime, customThreshold) {

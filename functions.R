@@ -19,7 +19,7 @@ create_barplot_by_day <- function(data, title_prefix) {
     theme_minimal()
 }
 
-create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
+create_heatmap_by_hour_day <- function(data, start_date, end_date, agents, all_agents) {
   start_date <- as.Date(start_date)
   end_date <- as.Date(end_date)
   
@@ -32,7 +32,7 @@ create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
   full_grid <- expand.grid(DAY_OF_WEEK = all_days_of_week, HOUR = all_hours)
   
   for (agent in agents) {
-    agent_data <- if (agent != '') {
+    agent_data <- if (agent != '' && !all_agents) {
       data[data$AGENT == agent,]
     } else {
       data
@@ -81,7 +81,7 @@ create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
   return(heatmap_data)
 }
 
-create_heatmap_for_week <- function(data, start_date, agents) {
+create_heatmap_for_week <- function(data, start_date, agents, all_agents) {
   start_date <- as.Date(start_date)
   end_date <- start_date + 6
   
@@ -89,7 +89,7 @@ create_heatmap_for_week <- function(data, start_date, agents) {
   data_list <- list()
   
   for (agent in agents) {
-    agent_data <- if (agent != '') {
+    agent_data <- if (agent != '' && !all_agents) {
       data[data$AGENT == agent,]
     } else {
       data

@@ -37,7 +37,7 @@ ui <- dashboardPage(
                              ")
                         )
              ),
-    
+    useShinyjs(),
     tabItems(
 
       ##### MENU 1 ######
@@ -76,37 +76,39 @@ ui <- dashboardPage(
       tabItem(tabName = "menu2",
               fluidRow(
                 column(2,
-                  shinydashboard::box(
-                    title = "Filters",
-                    width = NULL,
-                    status = "primary",
-                    solidHeader = TRUE,
-                    collapsible = TRUE,
-                    selectizeInput("select_menu2", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
-                    hr(),
-                    h4("Heatmap settings"),
-                    radioButtons("radio_btn", label = "Heatmap Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
-                    checkboxInput("merge_toggle", label = "Merge results", value = FALSE),
-
-                    # Only show when Weekly selected
-                    conditionalPanel(
-                      condition = "input.radio_btn === 'Weekly'",
-                      hr(),
-                      h4("Timeframe"),
-                      dateInput("start_date_weekly", label = "Start Date", value = Sys.Date(), weekstart = 1),
-                      actionButton("prev_week", "Previous week"),
-                      actionButton("next_week", "Next week"),
-                    ),
-                    
-                    # Only show when Cumulative selected
-                    conditionalPanel(
-                      condition = "input.radio_btn === 'Cumulative'",
-                      hr(),
-                      h4("Timeframe"),
-                      dateInput("start_date_cumulative", label = "Start Date", value = Sys.Date() - 30, weekstart = 1),
-                      dateInput("end_date_cumulative", label = "End Date", value = Sys.Date(), weekstart = 1),
-                    )
-                  )
+                       shinydashboard::box(
+                         title = "Filters",
+                         width = NULL,
+                         status = "primary",
+                         solidHeader = TRUE,
+                         collapsible = TRUE,
+                         h4("Agent settings"),
+                         selectizeInput("select_menu2", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
+                         checkboxInput("all_agents_toggle", label = "All agents", value = FALSE), # NEW CHECKBOX
+                         hr(),
+                         h4("Heatmap settings"),
+                         radioButtons("radio_btn", label = "Heatmap Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
+                         checkboxInput("merge_toggle", label = "Merge results", value = FALSE),
+                         
+                         # Only show when Weekly selected
+                         conditionalPanel(
+                           condition = "input.radio_btn === 'Weekly'",
+                           hr(),
+                           h4("Timeframe"),
+                           dateInput("start_date_weekly", label = "Start Date", value = Sys.Date(), weekstart = 1),
+                           actionButton("prev_week", "Previous week"),
+                           actionButton("next_week", "Next week"),
+                         ),
+                         
+                         # Only show when Cumulative selected
+                         conditionalPanel(
+                           condition = "input.radio_btn === 'Cumulative'",
+                           hr(),
+                           h4("Timeframe"),
+                           dateInput("start_date_cumulative", label = "Start Date", value = Sys.Date() - 30, weekstart = 1),
+                           dateInput("end_date_cumulative", label = "End Date", value = Sys.Date(), weekstart = 1),
+                         )
+                       )
                 ),
                 column(
                   width = 10,
@@ -118,18 +120,8 @@ ui <- dashboardPage(
                       status = "info",
                       solidHeader = TRUE,
                       collapsible = TRUE,
-                      width = NULL,
-                      # Conditional content inside the box
-                      conditionalPanel(
-                        condition = "input.select_menu2 != ''",
-                        uiOutput("output_week")
-                      ),
-                      conditionalPanel(
-                        condition = "input.select_menu2 == ''",
-                        div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
-                            h3("Please select an agent first", style = "text-align: center;")
-                        )
-                      )
+                      width = NULL,                      
+                      uiOutput("output_week")
                     )
                   ),
                   
@@ -142,17 +134,7 @@ ui <- dashboardPage(
                       solidHeader = TRUE,
                       collapsible = TRUE,
                       width = NULL,
-                      # Conditional content inside the box
-                      conditionalPanel(
-                        condition = "input.select_menu2 != ''",
-                        uiOutput("output_cumulative")
-                      ),
-                      conditionalPanel(
-                        condition = "input.select_menu2 == ''",
-                        div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
-                            h3("Please select an agent first", style = "text-align: center;")
-                        )
-                      )
+                      uiOutput("output_cumulative")
                     )
                   )
                 )
@@ -334,8 +316,6 @@ server <- function(input, output, session) {
   
   ###### MENU 2 ######
   
-  library(shiny)
-  
   heatmap_plots <- reactiveValues(weeklyPlots = NULL, cumulativePlots = NULL)
   
   # Function to update the start week and refresh the plot for "Per week"
@@ -350,87 +330,105 @@ server <- function(input, output, session) {
   })
   
   observe({
-    req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
-    tryCatch({
-      heatmap_data <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
+    # Only require the start date to be available; remove 'input$select_menu2' from req()
+    req(input$start_date_weekly)
+    
+    if (input$all_agents_toggle) {
+      updateSelectizeInput(session, "select_menu2", selected = NULL)
+      shinyjs::disable("select_menu2")
+      shinyjs::disable("merge_toggle")
+      showNotification("No selection in 'Select Menu 2'. Displaying default data.", type = "warning")
+      selected_menu <- "All Agents"
+    } else {
+      shinyjs::enable("select_menu2")
+      shinyjs::enable("merge_toggle")
+      selected_menu <- input$select_menu2
+    }
+    
+    # Use 'selected_menu' now, which will always have some form of valid input
+    heatmap_data <- create_heatmap_for_week(data, input$start_date_weekly, selected_menu, input$all_agents_toggle)
+    heatmap_plots$weeklyPlots <- heatmap_data$plot_list
+    
+    if (input$merge_toggle) {
+      heatmap_plots$weeklyPlots <- merge_heatmaps(heatmap_data$data_list, FALSE)
+    } else {
       heatmap_plots$weeklyPlots <- heatmap_data$plot_list
-      
-      if (input$merge_toggle) {
-        heatmap_plots$weeklyPlots <- merge_heatmaps(heatmap_data$data_list, FALSE)
-      }
-      
-      lapply(seq_along(heatmap_plots$weeklyPlots), function(i) {
-        output[[paste("plot", i, sep="_")]] <- renderPlotly({
-          return(heatmap_plots$weeklyPlots[[i]])
-        })
+    }
+    
+    lapply(seq_along(heatmap_plots$weeklyPlots), function(i) {
+      output[[paste("plot", i, sep="_")]] <- renderPlotly({
+        return(heatmap_plots$weeklyPlots[[i]])
       })
-    }, error = function(e) {
-      showNotification(paste("Error in weekly heatmap generation:", e$message), type = "error")
     })
   })
   
   observe({
-    req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
-    tryCatch({
-      if (as.Date(input$end_date_cumulative) > as.Date(input$start_date_cumulative)) {
-        if (difftime(as.Date(input$end_date_cumulative), as.Date(input$start_date_cumulative), units = "days") >= 14) {
-          heatmap_data <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
-          heatmap_plots$cumulativePlots <- heatmap_data$plot_list
-          
-          if (input$merge_toggle) {
-            heatmap_plots$cumulativePlots <- merge_heatmaps(heatmap_data$data_list, TRUE)
-          }
-          
-          lapply(seq_along(heatmap_plots$cumulativePlots), function(i) {
-            output[[paste("cumulative_plot", i, sep="_")]] <- renderPlotly({
-              return(heatmap_plots$cumulativePlots[[i]])
-            })
-          })
-        } else {
-          showNotification("Date range must span at least 14 days for cumulative heatmaps.", type = "error")
-        }
+    req(input$start_date_cumulative, input$end_date_cumulative)  # Ensure necessary inputs are available
+    
+    if (input$all_agents_toggle) {
+      updateSelectizeInput(session, "select_menu2", selected = NULL)
+      shinyjs::disable("select_menu2")
+      shinyjs::disable("merge_toggle")
+      showNotification("No selection in 'Select Menu 2'. Displaying default data.", type = "warning")
+      selected_menu <- "All Agents"
+    } else {
+      shinyjs::enable("select_menu2")
+      shinyjs::enable("merge_toggle")
+      selected_menu <- input$select_menu2
+    }
+    
+    if (as.Date(input$start_date_cumulative) <= as.Date(input$end_date_cumulative)) {
+      heatmap_data <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, selected_menu, input$all_agents_toggle)
+      heatmap_plots$cumulativePlots <- heatmap_data$plot_list
+      
+      if (input$merge_toggle) {
+        heatmap_plots$cumulativePlots <- merge_heatmaps(heatmap_data$data_list, TRUE)
       } else {
-        showNotification("Start date must be before end date!", type = "error")
+        heatmap_plots$cumulativePlots <- heatmap_data$plot_list
       }
-    }, error = function(e) {
-      showNotification(paste("Error in cumulative heatmap generation:", e$message), type = "error")
-    })
+      
+      lapply(seq_along(heatmap_plots$cumulativePlots), function(i) {
+        output[[paste("cumulative_plot", i, sep="_")]] <- renderPlotly({
+          return(heatmap_plots$cumulativePlots[[i]])
+        })
+      })
+    }
   })
   
   # Render the heatmap for the "Per week" tab
   output$output_week <- renderUI({
-    req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
-    tryCatch({
-      plot_output_list <- lapply(seq_along(heatmap_plots$weeklyPlots), function(i) {
-        plotName <- paste("plot", i, sep="_")
-        plotlyOutput(plotName, height = "300px")
-      })
-      
-      # Return a list of plot outputs
-      do.call(tagList, plot_output_list)
-    }, error = function(e) {
-      showNotification(paste("Error displaying weekly plots:", e$message), type = "error")
+    
+    plot_output_list <- lapply(seq_along(heatmap_plots$weeklyPlots), function(i) {
+      plotName <- paste("plot", i, sep="_")
+      div(
+        plotlyOutput(plotName, height = "300px"),
+        style = "padding-bottom: 35px;"
+      )
     })
+    
+    # Return a list of plot outputs
+    do.call(tagList, plot_output_list)
   })
   
   # Render the heatmap for the "Cumulative" tab
   output$output_cumulative <- renderUI({
-    req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
-    tryCatch({
-      if (as.Date(input$end_date_cumulative) > as.Date(input$start_date_cumulative)) {
-        plot_output_list <- lapply(seq_along(heatmap_plots$cumulativePlots), function(i) {
-          plotName <- paste("cumulative_plot", i, sep="_")
-          plotlyOutput(plotName, height = "300px")
-        })
-        
-        # Return a list of plot outputs
-        do.call(tagList, plot_output_list)
-      }
-    }, error = function(e) {
-      showNotification(paste("Error displaying cumulative plots:", e$message), type = "error")
-    })
+    req(input$start_date_cumulative, input$end_date_cumulative)  # Ensure necessary inputs are available
+    if (as.Date(input$start_date_cumulative) <= as.Date(input$end_date_cumulative)) {
+      
+      plot_output_list <- lapply(seq_along(heatmap_plots$cumulativePlots), function(i) {
+        plotName <- paste("cumulative_plot", i, sep="_")
+        div(
+          plotlyOutput(plotName, height = "300px"),
+          style = "padding-bottom: 35px;"
+        )
+      })
+      
+      # Return a list of plot outputs
+      do.call(tagList, plot_output_list)
+    } else {
+      showNotification("Start date must be before end date!", type = "error")
+    }
   })
-  
 
   
   ###### MENU 3 ######
@@ -444,37 +442,41 @@ server <- function(input, output, session) {
       return(NULL)
     }
     
+    # Validate start and end time formats
     if(!grepl("^([01]?[0-9]|2[0-3]):[0-5][0-9]$", input$start_time_menu3)) {
       shiny::showNotification("Invalid start time format. Please enter time as HH:MM (24-hour format).", type = "error")
       return(NULL)
     }
-    
-    # Validate the end time format
     if(!grepl("^([01]?[0-9]|2[0-3]):[0-5][0-9]$", input$end_time_menu3)) {
       shiny::showNotification("Invalid end time format. Please enter time as HH:MM (24-hour format).", type = "error")
       return(NULL)
     }
     
-    # Combine the date and start time into a single datetime string
+    # Check that end date is later than start date
+    if(as.Date(input$start_date_menu3) > as.Date(input$end_date_menu3)) {
+      shiny::showNotification("End date must be later than the start date.", type = "error")
+      return(NULL)
+    }
+    
+    # Combine the date and time into single datetime strings
     start_datetime <- paste(input$start_date_menu3, input$start_time_menu3)
-    # Combine the date and end time into a single datetime string
     end_datetime <- paste(input$end_date_menu3, input$end_time_menu3)
     
     # Format the datetime strings
     start_datetime_formatted <- format(as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     end_datetime_formatted <- format(as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
-
+    
     tryCatch({
       plot <- create_agent_alarm_bar_plot(data, start_datetime_formatted, end_datetime_formatted, input$select_menu3)
       if(is.null(plot)) {
         shiny::showNotification("Plot could not be generated. Please check the input data.", type = "error")
-      } else {
-        ggplotly(plot, source = 'alarm_density', tooltip = "text")
+        return(NULL)
       }
+      div(ggplotly(plot, source = 'alarm_density', tooltip = "text"), style = "padding-bottom: 50px;") # Adding padding
     }, error = function(e) {
       # Log the error message and notify the user
       message <- paste("Error in generating plot:", e$message)
-      cat(message, "\n") # This will print the error message in the R console
+      cat(message, "\n") # This prints the error message in the R console
       shiny::showNotification("An error occurred while generating the plot. Please check the console for more information.", type = "error")
       NULL
     })
@@ -689,7 +691,7 @@ server <- function(input, output, session) {
     if (is.null(input$mainTable_rows_selected)) {
       div(
         style = "display: flex; justify-content: center; align-items: center; height: 200px;",
-        h4("No data selected")
+        h4("Select timeframe for details")
       )
     } else {
       selectedRow <- input$mainTable_rows_selected

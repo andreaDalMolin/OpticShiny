@@ -249,11 +249,9 @@ ui <- dashboardPage(
                                     DTOutput("table_menu6"))),
                        # Second tabPanel with fixed height and scrollable content
                        tabPanel("Notable periods",
-                                div(style = "height: 400px; overflow-y: auto;",
-                                    column(6, 
-                                           div(class = "scrollable-mainTable",
-                                               DTOutput("mainTable"))),
-                                    column(6, uiOutput("detailsPanel"))))
+                                uiOutput("selectedAgentLabel"),
+                                uiOutput("contentDisplay")  # This output will handle the conditional content
+                       )
                      ),
                      shinydashboard::box(
                        title = "Root Cause Tracker", # Root Cause - Global Problem Tracker ;)
@@ -274,7 +272,6 @@ ui <- dashboardPage(
                        height = 400,
                        solidHeader = TRUE,
                        collapsible = TRUE,
-                       
                      )
                    )
                 )
@@ -576,6 +573,46 @@ server <- function(input, output, session) {
     })
   })
   
+  # Output for the label
+  output$selectedAgentLabel <- renderUI({
+    req(input$select_menu6)
+    if (length(input$select_menu6) > 0) {
+      selected_agent <- input$select_menu6[1]
+      h4("Notable periods for the agent:", strong(selected_agent), style = "margin-bottom: 10px;")
+    } else {
+      return(NULL)
+    }
+  })
+  
+  # Conditional display content
+  output$contentDisplay <- renderUI({
+    if (length(input$select_menu6) > 0) {
+      # If there's a selection, display the tables
+      div(style = "height: 400px; overflow-y: auto;",
+          column(6, 
+                 div(class = "scrollable-mainTable",
+                     DTOutput("mainTable"))),
+          column(6, uiOutput("detailsPanel"))
+      )
+    } else {
+      # If no selection, display the centered message
+      div(style = "display: flex; justify-content: center; align-items: center; height: 400px;",
+          h3("Select an agent first", style = "text-align: center;")
+      )
+    }
+  })
+  
+  output$selectedAgentLabel <- renderUI({
+    req(input$select_menu6)  # Ensure there is at least one selection
+    selected_agent <- input$select_menu6[1]  # Take the first selected element
+    
+    # Return a styled HTML output
+    HTML(sprintf(
+      '<div style="padding-bottom: 10px;"><h4 style="font-size: 16px;">Notable periods for the agent: <strong>%s</strong></h4></div>',
+      selected_agent
+    ))
+  })
+  
   overlap_details <- reactive({
     req(input$select_menu6)  # Ensure that the input is not NULL or empty
     if (length(input$select_menu6) > 0) {
@@ -600,8 +637,7 @@ server <- function(input, output, session) {
     formatted_summarized_data <- overlap_details()$summarized_data %>%
       mutate(`Surge start` = format(Start1, "%d-%m-%Y %T"),
              `Surge end` = format(End1, "%d-%m-%Y %T")) %>%
-      select(`Surge start`, `Surge end`) %>%
-      arrange(desc(`Surge start`))
+      select(`Surge start`, `Surge end`)
     
     datatable(formatted_summarized_data, selection = 'single', rownames = FALSE, options = list(
       dom = 't', # This option is to remove the datatable's controls and only show the table

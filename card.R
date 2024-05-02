@@ -7,14 +7,48 @@ library(DT)
 library(shinycssloaders)
 
 # Sample data including the new entries
+# Example revised data structure based on your new format
+library(lubridate)
+
 data <- data.frame(
-  EMMA = c(rep("EMMA", 4), rep("EMMA", 2)),
-  Filter1 = c("SCOM", "Zabbix", "CA_Spectrum", "LucentOMS", "SCOM", "DICA"),
-  Start1 = as.POSIXct(c("2024-03-30 20:00:00", "2024-03-30 20:00:00", "2024-03-30 20:00:00", "2024-03-31 15:00:00", "2024-03-28 15:00:00", "2024-03-28 15:00:00")),
-  End1 = as.POSIXct(c("2024-03-30 22:00:00", "2024-03-30 22:00:00", "2024-03-30 22:00:00", "2024-03-31 17:00:00", "2024-03-28 19:00:00", "2024-03-28 19:00:00")),
-  Start2 = as.POSIXct(c("2024-03-30 20:00:00", "2024-03-30 20:00:00", "2024-03-30 20:00:00", "2024-03-31 14:00:00", "2024-03-28 14:00:00", "2024-03-28 14:00:00")),
-  End2 = as.POSIXct(c("2024-03-30 23:00:00", "2024-03-31 06:00:00", "2024-03-30 22:00:00", "2024-03-31 16:00:00", "2024-03-28 16:00:00", "2024-03-28 16:00:00"))
+  Filter1 = rep("EMMA", 15),
+  Start1 = ymd_hms(c(
+    "2024-01-02 00:00:00", "2024-01-02 00:00:00", "2024-01-02 00:00:00",
+    "2024-01-02 00:00:00", "2024-01-02 00:00:00", "2024-01-02 00:00:00",
+    "2024-01-02 00:00:00", "2024-01-02 00:00:00", "2024-01-09 10:00:00",
+    "2024-01-09 10:00:00", "2024-01-09 10:00:00", "2024-01-09 10:00:00",
+    "2024-01-09 10:00:00", "2024-01-09 10:00:00", "2024-01-09 10:00:00"
+  )),
+  End1 = ymd_hms(c(
+    "2024-01-02 02:00:00", "2024-01-02 02:00:00", "2024-01-02 02:00:00",
+    "2024-01-02 02:00:00", "2024-01-02 02:00:00", "2024-01-02 02:00:00",
+    "2024-01-02 02:00:00", "2024-01-02 02:00:00", "2024-01-09 12:00:00",
+    "2024-01-09 12:00:00", "2024-01-09 12:00:00", "2024-01-09 12:00:00",
+    "2024-01-09 12:00:00", "2024-01-09 12:00:00", "2024-01-09 12:00:00"
+  )),
+  Filter2 = c(
+    "SCOM", "Zabbix", "HA", "StruxureWare", "C-NMS", "EML",
+    "SDH", "LucentOMS", "StruxureWare", "SCOM", "SkyWalker", "LucentOMS",
+    "NetAct", "EML", "MileStone"
+  ),
+  Start2 = ymd_hms(c(
+    "2024-01-01 20:00:00", "2024-01-01 21:00:00", "2024-01-02 00:00:00",
+    "2024-01-02 00:00:00", "2024-01-02 01:00:00", "2024-01-02 01:00:00",
+    "2024-01-02 01:00:00", "2024-01-02 01:00:00", "2024-01-09 08:00:00",
+    "2024-01-09 08:00:00", "2024-01-09 09:00:00", "2024-01-09 09:00:00",
+    "2024-01-09 09:00:00", "2024-01-09 09:00:00", "2024-01-09 09:00:00"
+  )),
+  End2 = ymd_hms(c(
+    "2024-01-02 02:00:00", "2024-01-02 02:00:00", "2024-01-02 02:00:00",
+    "2024-01-02 02:00:00", "2024-01-02 03:00:00", "2024-01-02 03:00:00",
+    "2024-01-02 03:00:00", "2024-01-02 10:00:00", "2024-01-09 10:00:00",
+    "2024-01-09 12:00:00", "2024-01-09 11:00:00", "2024-01-09 13:00:00",
+    "2024-01-09 13:00:00", "2024-01-09 13:00:00", "2024-01-09 14:00:00"
+  )),
+  stringsAsFactors = FALSE
 )
+
+
 
 # Create a summarized version for the main table
 summarized_data <- data %>%
@@ -34,28 +68,31 @@ ui <- dashboardPage(
       menuItem("RC Tracker", tabName = "menu6")
     )
   ),
-  dashboardBody(
-    column(
-      5,
-      box(
-        title = "Events",
-        status = "primary",
-        width = NULL,
-        solidHeader = TRUE,
-        column(6, DTOutput("mainTable")),
-        column(6, uiOutput("detailsPanel"))
-      )
+dashboardBody(
+  column(
+    5,
+    box(
+      title = "Events",
+      status = "primary",
+      width = NULL,
+      solidHeader = TRUE,
+      style = "height: 500px; overflow-y: auto;", # Set the box height and make it scrollable
+      column(6, DTOutput("mainTable")),
+      column(6, uiOutput("detailsPanel"))
     )
   )
+)
+
   
 )
 
 server <- function(input, output, session) {
   output$mainTable <- renderDT({
-    # Format Start1 and End1 columns for the main table
+    # Format and rename Start1 and End1 columns for the main table
     formatted_summarized_data <- summarized_data %>%
-      mutate(Start1 = paste(format(Start1, "%d-%m-%Y"), format(Start1, "%T")),
-             End1 = paste(format(End1, "%d-%m-%Y"), format(End1, "%T")))
+      mutate(`Surge start` = paste(format(Start1, "%d-%m-%Y"), format(Start1, "%T")),
+             `Surge end` = paste(format(End1, "%d-%m-%Y"), format(End1, "%T"))) %>%
+      select(`Surge start`, `Surge end`)  # Make sure to only select the necessary columns
     
     datatable(formatted_summarized_data, selection = 'single', rownames = FALSE, options = list(
       dom = 't', # This option is to remove the datatable's controls and only show the table
@@ -66,35 +103,35 @@ server <- function(input, output, session) {
   }, server = FALSE)
   
   output$detailsPanel <- renderUI({
-    # If no row is selected, show "No data selected" centered horizontally and vertically
     if (is.null(input$mainTable_rows_selected)) {
-      return(div(
-        style = "display: flex; justify-content: center; align-items: center; height: 200px;", # Adjust the height as needed
+      div(
+        style = "display: flex; justify-content: center; align-items: center; height: 200px;",
         h4("No data selected")
-      ))
+      )
     } else {
       selectedRow <- input$mainTable_rows_selected
       detailData <- data %>%
-        filter(Start1 == summarized_data$Start1[selectedRow] & End1 == summarized_data$End1[selectedRow]) %>%
-        select(Filter1, Start2, End2)
+        filter(Start1 == summarized_data$Start1[selectedRow], End1 == summarized_data$End1[selectedRow]) %>%
+        select(Agent = Filter2, From = Start2, Till = End2)
       
       dataTableOutput("detailsTable")
     }
   })
-  
   
   output$detailsTable <- renderDataTable({
     req(input$mainTable_rows_selected)
     selectedRow <- input$mainTable_rows_selected
     
     detailData <- data %>%
-      filter(Start1 == summarized_data$Start1[selectedRow] & End1 == summarized_data$End1[selectedRow]) %>%
-      select(Filter1, Start2, End2) %>%
-      mutate(Start2 = format(Start2, "%d-%m-%Y %T"),
-             End2 = format(End2, "%d-%m-%Y %T"))
+      filter(Start1 == summarized_data$Start1[selectedRow], End1 == summarized_data$End1[selectedRow]) %>%
+      select(Agent = Filter2, From = Start2, Till = End2) %>%
+      mutate(
+        From = format(From, "%d-%m-%Y %T"),
+        Till = format(Till, "%d-%m-%Y %T")
+      )
     
     datatable(detailData, rownames = FALSE, options = list(
-      dom = 't', # This option is to remove the datatable's controls and only show the table
+      dom = 't',
       paging = FALSE,
       searching = FALSE,
       ordering = FALSE,
@@ -104,3 +141,4 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui, server)
+

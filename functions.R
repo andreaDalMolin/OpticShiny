@@ -495,7 +495,8 @@ analyze_overlaps <- function(agent_name, output_csv = "overlap_details.csv") {
     overlaps_result <- agent_surges[overlaps$xid][, .(Filter1 = Filter, Start1 = Start, End1 = End)]
     overlaps_other <- other_agents_surges[overlaps$yid][, .(Filter2 = Filter, Start2 = Start, End2 = End)]
     final_overlaps <- cbind(overlaps_result, overlaps_other)
-    fwrite(final_overlaps, output_csv)
+    setorder(final_overlaps, -Start1)
+    # fwrite(final_overlaps, output_csv) # OPTIONAL
     return(final_overlaps)
   } else {
     return(NULL)
@@ -503,6 +504,8 @@ analyze_overlaps <- function(agent_name, output_csv = "overlap_details.csv") {
 }
 
 myoverlaps <- analyze_overlaps("EMMA")
+
+write.csv(myoverlaps, "myoverlaps.csv", row.names = FALSE)
 
 customSurges <- read.csv("surge_periods.csv")
 

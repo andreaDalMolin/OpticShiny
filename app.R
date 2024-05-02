@@ -23,7 +23,20 @@ ui <- dashboardPage(
     )
   ),
   dashboardBody(
-    tags$div(tags$style(HTML( ".dropdown-menu{z-index:10000 !important;}"))),
+    tags$div(tags$style(HTML("
+                             .dropdown-menu{z-index:10000 !important;}
+                             .scrollable-mainTable::-webkit-scrollbar {
+                                display: none; /* for Chrome, Safari, and Opera */
+                              }
+                              .scrollable-mainTable {
+                                -ms-overflow-style: none;  /* IE and Edge */
+                                scrollbar-width: none;  /* Firefox */
+                                overflow-y: auto;
+                                height: 400px; /* Fixed height */
+                              }
+                             ")
+                        )
+             ),
     
     tabItems(
 
@@ -231,21 +244,21 @@ ui <- dashboardPage(
                    fluidRow(
                      tabBox(
                        title = "Data insight",
-                       height = 300,
-                       tabPanel(
-                         "Common surges",
-                         DTOutput("table_menu6")
-                       ),
-                       tabPanel(
-                         "Notable periods",
-                         column(6, DTOutput("mainTable")),
-                         column(6, uiOutput("detailsPanel"))
-                       ),
+                       tabPanel("Common surges",
+                                div(style = "height: 400px; overflow-y: auto;",  # Adjust height as necessary
+                                    DTOutput("table_menu6"))),
+                       # Second tabPanel with fixed height and scrollable content
+                       tabPanel("Notable periods",
+                                div(style = "height: 400px; overflow-y: auto;",
+                                    column(6, 
+                                           div(class = "scrollable-mainTable",
+                                               DTOutput("mainTable"))),
+                                    column(6, uiOutput("detailsPanel"))))
                      ),
                      shinydashboard::box(
                        title = "Root Cause Tracker", # Root Cause - Global Problem Tracker ;)
                        status = "success",
-                       height = 300,
+                       height = 400,
                        solidHeader = TRUE,
                        collapsible = TRUE,
                        div(
@@ -258,7 +271,7 @@ ui <- dashboardPage(
                      shinydashboard::box(
                        title = "Historical data",
                        status = "warning",
-                       height = 300,
+                       height = 400,
                        solidHeader = TRUE,
                        collapsible = TRUE,
                        
@@ -567,46 +580,73 @@ server <- function(input, output, session) {
     req(input$select_menu6)  # Ensure that the input is not NULL or empty
     if (length(input$select_menu6) > 0) {
       agent_name <- input$select_menu6[1]  # Use the first selected agent
-      return(analyze_overlaps(agent_name))
+      overlaps_data <- list()
+      
+      overlaps_data$raw_overlaps <- analyze_overlaps(agent_name)
+      overlaps_data$summarized_data <- overlaps_data$raw_overlaps %>%
+        select(Start1, End1) %>%
+        distinct() %>%
+        arrange(Start1, End1)
+      
+      return(overlaps_data)
     } else {
-      return(data.frame())  # Return an empty data frame if no selection
+      return(list(raw_overlaps = data.frame(), summarized_data = data.frame()))  # Return structured empty data
     }
   })
   
-  # Main table output
+  # Main table output utilizing overlap_details
   output$mainTable <- renderDT({
-    datatable(overlap_details(), selection = 'single', rownames = FALSE, options = list(
-      dom = 't',
+    req(overlap_details())
+    formatted_summarized_data <- overlap_details()$summarized_data %>%
+      mutate(`Surge start` = format(Start1, "%d-%m-%Y %T"),
+             `Surge end` = format(End1, "%d-%m-%Y %T")) %>%
+      select(`Surge start`, `Surge end`) %>%
+      arrange(desc(`Surge start`))
+    
+    datatable(formatted_summarized_data, selection = 'single', rownames = FALSE, options = list(
+      dom = 't', # This option is to remove the datatable's controls and only show the table
       paging = FALSE,
       searching = FALSE,
       info = FALSE
     ))
-  })
+  }, server = FALSE)
   
   # Details panel UI based on selection in the main table
   output$detailsPanel <- renderUI({
     if (is.null(input$mainTable_rows_selected)) {
-      div(style = "display: flex; justify-content: center; align-items: center; height: 200px;",
-          h4("No data selected"))
+      div(
+        style = "display: flex; justify-content: center; align-items: center; height: 200px;",
+        h4("No data selected")
+      )
     } else {
+      selectedRow <- input$mainTable_rows_selected
+      detailData <- overlap_details()$raw_overlaps %>%
+        filter(Start1 == overlap_details()$summarized_data$Start1[selectedRow], 
+               End1 == overlap_details()$summarized_data$End1[selectedRow]) %>%
+        select(Agent = Filter2, From = Start2, Till = End2)
+      
       dataTableOutput("detailsTable")
     }
   })
   
-  # Details table output showing data related to the selected row in the main table
   output$detailsTable <- renderDataTable({
     req(input$mainTable_rows_selected)
     selectedRow <- input$mainTable_rows_selected
-    detailData <- overlap_details()[
-      Start1 == overlap_details()[selectedRow, Start1] &
-        End1 == overlap_details()[selectedRow, End1], 
-      .(Filter1, Start2, End2)]
+    
+    detailData <- overlap_details()$raw_overlaps %>%
+      filter(Start1 == overlap_details()$summarized_data$Start1[selectedRow], 
+             End1 == overlap_details()$summarized_data$End1[selectedRow]) %>%
+      select(Agent = Filter2, From = Start2, Till = End2) %>%
+      mutate(
+        From = format(From, "%d-%m-%Y %T"),
+        Till = format(Till, "%d-%m-%Y %T")
+      ) %>%
+      arrange(`From`)
     
     datatable(detailData, rownames = FALSE, options = list(
       dom = 't',
       paging = FALSE,
       searching = FALSE,
-      ordering = FALSE,
       info = FALSE
     ))
   })

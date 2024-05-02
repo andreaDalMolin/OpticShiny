@@ -84,35 +84,33 @@ ui <- dashboardPage(
                          collapsible = TRUE,
                          h4("Agent settings"),
                          selectizeInput("select_menu2", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
-                         checkboxInput("all_agents_toggle", label = "All agents", value = FALSE), # NEW CHECKBOX
+                         checkboxInput("all_agents_toggle", label = "All agents", value = FALSE),
                          hr(),
                          h4("Heatmap settings"),
                          radioButtons("radio_btn", label = "Heatmap Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
                          checkboxInput("merge_toggle", label = "Merge results", value = FALSE),
                          
-                         # Only show when Weekly selected
                          conditionalPanel(
                            condition = "input.radio_btn === 'Weekly'",
                            hr(),
                            h4("Timeframe"),
                            dateInput("start_date_weekly", label = "Start Date", value = Sys.Date(), weekstart = 1),
                            actionButton("prev_week", "Previous week"),
-                           actionButton("next_week", "Next week"),
+                           actionButton("next_week", "Next week")
                          ),
                          
-                         # Only show when Cumulative selected
                          conditionalPanel(
                            condition = "input.radio_btn === 'Cumulative'",
                            hr(),
                            h4("Timeframe"),
                            dateInput("start_date_cumulative", label = "Start Date", value = Sys.Date() - 30, weekstart = 1),
-                           dateInput("end_date_cumulative", label = "End Date", value = Sys.Date(), weekstart = 1),
+                           dateInput("end_date_cumulative", label = "End Date", value = Sys.Date(), weekstart = 1)
                          )
                        )
                 ),
                 column(
                   width = 10,
-                  # Only show when Weekly selected
+                  # Modified conditional panel for Weekly selection
                   conditionalPanel(
                     condition = "input.radio_btn === 'Weekly'",
                     box(
@@ -120,12 +118,19 @@ ui <- dashboardPage(
                       status = "info",
                       solidHeader = TRUE,
                       collapsible = TRUE,
-                      width = NULL,                      
-                      uiOutput("output_week")
+                      width = NULL,
+                      # Include message if no agents are selected
+                      uiOutput("output_week"),
+                      conditionalPanel(
+                        condition = "input.select_menu2.length == 0 && !input.all_agents_toggle",
+                        tags$div(style = "height: 400px; display: flex; align-items: center; justify-content: center;",
+                                 tags$h3(style = "text-align:center;", "Please select at least one agent")
+                        )
+                      )
                     )
                   ),
                   
-                  # Only show when Cumulative selected
+                  # Modified conditional panel for Cumulative selection
                   conditionalPanel(
                     condition = "input.radio_btn === 'Cumulative'",
                     box(
@@ -134,12 +139,22 @@ ui <- dashboardPage(
                       solidHeader = TRUE,
                       collapsible = TRUE,
                       width = NULL,
-                      uiOutput("output_cumulative")
+                      uiOutput("output_cumulative"),
+                      conditionalPanel(
+                        condition = "input.select_menu2.length == 0 && !input.all_agents_toggle",
+                        tags$div(style = "height: 400px; display: flex; align-items: center; justify-content: center;",
+                                 tags$h3(style = "text-align:center;", "Please select at least one agent")
+                        )
+                      )
                     )
                   )
+                  
                 )
               )
-      ),
+      )
+      
+      ,
+      
       
       ##### MENU 3 ######
       

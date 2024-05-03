@@ -10,6 +10,9 @@ source("global.R")
 source("functions.R")
 source("data_preparation.R")
 
+agent_choices <- c(sort(unique(data$AGENT)))
+
+
 # Define UI
 ui <- dashboardPage(
   dashboardHeader(title = "Optic Alarms Dashboard"),
@@ -82,35 +85,40 @@ ui <- dashboardPage(
                          status = "primary",
                          solidHeader = TRUE,
                          collapsible = TRUE,
-                         h4("Agent settings"),
-                         selectizeInput("select_menu2", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
-                         checkboxInput("all_agents_toggle", label = "All agents", value = FALSE),
+                         selectizeInput(
+                           "select_menu2", 
+                           label = "Agent(s)", 
+                           choices = data.frame(All=c("All agents"),Agents=agent_choices),
+                           multiple = TRUE
+                         ),
                          hr(),
                          h4("Heatmap settings"),
                          radioButtons("radio_btn", label = "Heatmap Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
                          checkboxInput("merge_toggle", label = "Merge results", value = FALSE),
                          
+                         # Only show when Weekly selected
                          conditionalPanel(
                            condition = "input.radio_btn === 'Weekly'",
                            hr(),
                            h4("Timeframe"),
                            dateInput("start_date_weekly", label = "Start Date", value = Sys.Date(), weekstart = 1),
                            actionButton("prev_week", "Previous week"),
-                           actionButton("next_week", "Next week")
+                           actionButton("next_week", "Next week"),
                          ),
                          
+                         # Only show when Cumulative selected
                          conditionalPanel(
                            condition = "input.radio_btn === 'Cumulative'",
                            hr(),
                            h4("Timeframe"),
                            dateInput("start_date_cumulative", label = "Start Date", value = Sys.Date() - 30, weekstart = 1),
-                           dateInput("end_date_cumulative", label = "End Date", value = Sys.Date(), weekstart = 1)
+                           dateInput("end_date_cumulative", label = "End Date", value = Sys.Date(), weekstart = 1),
                          )
                        )
                 ),
                 column(
                   width = 10,
-                  # Modified conditional panel for Weekly selection
+                  # Only show when Weekly selected
                   conditionalPanel(
                     condition = "input.radio_btn === 'Weekly'",
                     box(
@@ -119,18 +127,21 @@ ui <- dashboardPage(
                       solidHeader = TRUE,
                       collapsible = TRUE,
                       width = NULL,
-                      # Include message if no agents are selected
-                      uiOutput("output_week"),
+                      # Conditional content inside the box
                       conditionalPanel(
-                        condition = "input.select_menu2.length == 0 && !input.all_agents_toggle",
-                        tags$div(style = "height: 400px; display: flex; align-items: center; justify-content: center;",
-                                 tags$h3(style = "text-align:center;", "Please select at least one agent")
+                        condition = "input.select_menu2 != ''",
+                        uiOutput("output_week")
+                      ),
+                      conditionalPanel(
+                        condition = "input.select_menu2 == ''",
+                        div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
+                            h3("Please select an agent first", style = "text-align: center;")
                         )
                       )
                     )
                   ),
                   
-                  # Modified conditional panel for Cumulative selection
+                  # Only show when Cumulative selected
                   conditionalPanel(
                     condition = "input.radio_btn === 'Cumulative'",
                     box(
@@ -139,21 +150,22 @@ ui <- dashboardPage(
                       solidHeader = TRUE,
                       collapsible = TRUE,
                       width = NULL,
-                      uiOutput("output_cumulative"),
+                      # Conditional content inside the box
                       conditionalPanel(
-                        condition = "input.select_menu2.length == 0 && !input.all_agents_toggle",
-                        tags$div(style = "height: 400px; display: flex; align-items: center; justify-content: center;",
-                                 tags$h3(style = "text-align:center;", "Please select at least one agent")
+                        condition = "input.select_menu2 != ''",
+                        uiOutput("output_cumulative")
+                      ),
+                      conditionalPanel(
+                        condition = "input.select_menu2 == ''",
+                        div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
+                            h3("Please select an agent first", style = "text-align: center;")
                         )
                       )
                     )
                   )
-                  
                 )
               )
-      )
-      
-      ,
+      ),
       
       
       ##### MENU 3 ######
@@ -273,7 +285,7 @@ ui <- dashboardPage(
                      shinydashboard::box(
                        title = "Root Cause Tracker", # Root Cause - Global Problem Tracker ;)
                        status = "success",
-                       height = 400,
+                       #height = 400,
                        solidHeader = TRUE,
                        collapsible = TRUE,
                        div(
@@ -286,7 +298,7 @@ ui <- dashboardPage(
                      shinydashboard::box(
                        title = "Historical data",
                        status = "warning",
-                       height = 400,
+                       #height = 400,
                        solidHeader = TRUE,
                        collapsible = TRUE,
                      )
@@ -345,105 +357,106 @@ server <- function(input, output, session) {
   })
   
   observe({
-    # Only require the start date to be available; remove 'input$select_menu2' from req()
-    req(input$start_date_weekly)
-    
-    if (input$all_agents_toggle) {
-      updateSelectizeInput(session, "select_menu2", selected = NULL)
-      shinyjs::disable("select_menu2")
-      shinyjs::disable("merge_toggle")
-      showNotification("No selection in 'Select Menu 2'. Displaying default data.", type = "warning")
-      selected_menu <- "All Agents"
-    } else {
-      shinyjs::enable("select_menu2")
-      shinyjs::enable("merge_toggle")
-      selected_menu <- input$select_menu2
-    }
-    
-    # Use 'selected_menu' now, which will always have some form of valid input
-    heatmap_data <- create_heatmap_for_week(data, input$start_date_weekly, selected_menu, input$all_agents_toggle)
-    heatmap_plots$weeklyPlots <- heatmap_data$plot_list
-    
-    if (input$merge_toggle) {
-      heatmap_plots$weeklyPlots <- merge_heatmaps(heatmap_data$data_list, FALSE)
-    } else {
+    req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
+    tryCatch({
+      heatmap_data <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
       heatmap_plots$weeklyPlots <- heatmap_data$plot_list
-    }
-    
-    lapply(seq_along(heatmap_plots$weeklyPlots), function(i) {
-      output[[paste("plot", i, sep="_")]] <- renderPlotly({
-        return(heatmap_plots$weeklyPlots[[i]])
+      
+      if (input$merge_toggle) {
+        heatmap_plots$weeklyPlots <- merge_heatmaps(heatmap_data$data_list, FALSE)
+      }
+      
+      outputOptions(output, "output_week", suspendWhenHidden = FALSE)  # Ensure plots are always updated regardless of tab visibility
+      
+      # Use seq_along safely to handle empty or NULL lists
+      lapply(seq_along(heatmap_plots$weeklyPlots), function(i) {
+        output[[paste("plot", i, sep="_")]] <- renderPlotly({
+          # Check if the plot exists before trying to render it
+          if (i <= length(heatmap_plots$weeklyPlots)) {
+            return(heatmap_plots$weeklyPlots[[i]])
+          }
+        })
       })
+    }, error = function(e) {
+      showNotification(paste("Error in weekly heatmap generation:", e$message), type = "error")
     })
   })
   
+  
   observe({
-    req(input$start_date_cumulative, input$end_date_cumulative)  # Ensure necessary inputs are available
-    
-    if (input$all_agents_toggle) {
-      updateSelectizeInput(session, "select_menu2", selected = NULL)
-      shinyjs::disable("select_menu2")
-      shinyjs::disable("merge_toggle")
-      showNotification("No selection in 'Select Menu 2'. Displaying default data.", type = "warning")
-      selected_menu <- "All Agents"
-    } else {
-      shinyjs::enable("select_menu2")
-      shinyjs::enable("merge_toggle")
-      selected_menu <- input$select_menu2
-    }
-    
-    if (as.Date(input$start_date_cumulative) <= as.Date(input$end_date_cumulative)) {
-      heatmap_data <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, selected_menu, input$all_agents_toggle)
-      heatmap_plots$cumulativePlots <- heatmap_data$plot_list
-      
-      if (input$merge_toggle) {
-        heatmap_plots$cumulativePlots <- merge_heatmaps(heatmap_data$data_list, TRUE)
+    req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
+    tryCatch({
+      if (as.Date(input$end_date_cumulative) > as.Date(input$start_date_cumulative)) {
+        if (difftime(as.Date(input$end_date_cumulative), as.Date(input$start_date_cumulative), units = "days") >= 14) {
+          heatmap_data <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
+          heatmap_plots$cumulativePlots <- heatmap_data$plot_list
+          
+          if (input$merge_toggle) {
+            heatmap_plots$cumulativePlots <- merge_heatmaps(heatmap_data$data_list, TRUE)
+          }
+          
+          outputOptions(output, "output_cumulative", suspendWhenHidden = FALSE)  # Ensure plots are always updated regardless of tab visibility
+          
+          lapply(seq_along(heatmap_plots$cumulativePlots), function(i) {
+            output[[paste("cumulative_plot", i, sep="_")]] <- renderPlotly({
+              # Check if the plot exists before trying to render it
+              if (i <= length(heatmap_plots$cumulativePlots)) {
+                return(heatmap_plots$cumulativePlots[[i]])
+              }
+            })
+          })
+        } else {
+          showNotification("Date range must span at least 14 days for cumulative heatmaps.", type = "error")
+        }
       } else {
-        heatmap_plots$cumulativePlots <- heatmap_data$plot_list
+        showNotification("Start date must be before end date!", type = "error")
       }
-      
-      lapply(seq_along(heatmap_plots$cumulativePlots), function(i) {
-        output[[paste("cumulative_plot", i, sep="_")]] <- renderPlotly({
-          return(heatmap_plots$cumulativePlots[[i]])
-        })
-      })
-    }
+    }, error = function(e) {
+      showNotification(paste("Error in cumulative heatmap generation:", e$message), type = "error")
+    })
   })
+  
   
   # Render the heatmap for the "Per week" tab
   output$output_week <- renderUI({
-    
-    plot_output_list <- lapply(seq_along(heatmap_plots$weeklyPlots), function(i) {
-      plotName <- paste("plot", i, sep="_")
-      div(
-        plotlyOutput(plotName, height = "300px"),
-        style = "padding-bottom: 35px;"
-      )
-    })
-    
-    # Return a list of plot outputs
-    do.call(tagList, plot_output_list)
-  })
-  
-  # Render the heatmap for the "Cumulative" tab
-  output$output_cumulative <- renderUI({
-    req(input$start_date_cumulative, input$end_date_cumulative)  # Ensure necessary inputs are available
-    if (as.Date(input$start_date_cumulative) <= as.Date(input$end_date_cumulative)) {
-      
-      plot_output_list <- lapply(seq_along(heatmap_plots$cumulativePlots), function(i) {
-        plotName <- paste("cumulative_plot", i, sep="_")
+    req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
+    tryCatch({
+      plot_output_list <- lapply(seq_along(heatmap_plots$weeklyPlots), function(i) {
+        plotName <- paste("plot", i, sep="_")
         div(
           plotlyOutput(plotName, height = "300px"),
-          style = "padding-bottom: 35px;"
+          style = "padding-bottom: 50px;"  # Add padding to the bottom of each plot
         )
       })
       
       # Return a list of plot outputs
       do.call(tagList, plot_output_list)
-    } else {
-      showNotification("Start date must be before end date!", type = "error")
-    }
+    }, error = function(e) {
+      showNotification(paste("Error displaying weekly plots:", e$message), type = "error")
+    })
   })
+  
+  # Render the heatmap for the "Cumulative" tab
+  output$output_cumulative <- renderUI({
+    req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
+    tryCatch({
+      if (as.Date(input$end_date_cumulative) > as.Date(input$start_date_cumulative)) {
+        plot_output_list <- lapply(seq_along(heatmap_plots$cumulativePlots), function(i) {
+          plotName <- paste("cumulative_plot", i, sep="_")
+          div(
+            plotlyOutput(plotName, height = "300px"),
+            style = "padding-bottom: 50px;"  # Add padding to the bottom of each plot
+          )
+        })
+        
+        # Return a list of plot outputs
+        do.call(tagList, plot_output_list)
+      }
+    }, error = function(e) {
+      showNotification(paste("Error displaying cumulative plots:", e$message), type = "error")
+    })
+  })
+  
 
   
   ###### MENU 3 ######

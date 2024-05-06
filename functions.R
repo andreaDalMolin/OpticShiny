@@ -321,13 +321,13 @@ calculate_surge_periods <- function(data, start_datetime, end_datetime, customTh
       )
     } else {
       tibble(
-        Start = as.POSIXct(character()), # Ensure that the column type matches
-        End = as.POSIXct(character()),   # Ensure that the column type matches
-        Filter = character()
+        Start = as.POSIXct(character(0)), # Empty but with correct types
+        End = as.POSIXct(character(0)),   # Empty but with correct types
+        Filter = character(0)
       )
     }
   }
-  
+
   # Apply the function to each agent and combine results
   surge_periods <- map_df(filter_vals, process_agent_data)
   
@@ -348,22 +348,16 @@ calculate_surge_periods <- function(data, start_datetime, end_datetime, customTh
 }
 
 create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThreshold, drawAlarms, ...) {
-  # Convert start_time and end_time to POSIXct if they are not already
   start_time <- as.POSIXct(start_datetime)
   end_time <- as.POSIXct(end_datetime)
   
-  # Extract the ... arguments into a vector
   filter_vals <- c(...)
   
-  # Use the new function to calculate surge periods
   surge_periods <- calculate_surge_periods(data, start_datetime, end_datetime, customThreshold, ...)
   
-  # Initialize an empty data frame for the hourly counts
   all_hourly_counts <- data.frame(Hour = character(), Count = numeric(), Filter = character(), Avg = numeric(), StdDev = numeric())
   
-  # Continue with the rest of the function, minus the surge period detection code
   for (val in filter_vals) {
-    # Filter and summarize data
     filtered_data <- data[data$RAISETIME >= start_time & data$RAISETIME <= end_time & data$AGENT == val, ] %>%
       mutate(Hour = floor_date(RAISETIME, "hour")) %>%
       group_by(Hour) %>%
@@ -372,29 +366,20 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
              Avg = rollapply(Count, width = 3, FUN = mean, fill = NA, align = "right"),
              StdDev = rollapply(Count, width = 3, FUN = sd, fill = NA, align = "right"))
     
-    # Combine with previous counts
     all_hourly_counts <- rbind(all_hourly_counts, filtered_data)
   }
   
-  # Determine ymin and ymax based on data range
   ymin_val <- min(all_hourly_counts$Avg - all_hourly_counts$StdDev, na.rm = TRUE)
   ymax_val <- max(all_hourly_counts$Avg + all_hourly_counts$StdDev, na.rm = TRUE)
-  padding <- (ymax_val - ymin_val) * 0.1 # 10% padding
+  padding <- (ymax_val - ymin_val) * 0.1
   ymin_val <- ymin_val - padding
   ymax_val <- ymax_val + padding
   
-  # Base plot with rolling averages and deviation ribbons
   plot <- ggplot(all_hourly_counts, aes(x = Hour, y = Avg, group = Filter, color = Filter)) +
     geom_line() +
     geom_ribbon(aes(ymin = Avg - StdDev, ymax = Avg + StdDev, fill = Filter), alpha = 0.2) +
     geom_point(aes(y = Count), alpha = 0.5)
   
-  # Retrieve overlapping surges data
-  overlapping_surges <- find_overlapping_alarms(surge_periods = surge_periods)
-  print(str(overlapping_surges))
-  print(str(surge_periods))
-  
-  # Decide how to draw alarms based on the drawAlarms setting
   if (drawAlarms == 3) {
     for(surge in unique(surge_periods$Filter)) {
       surge_data <- surge_periods[surge_periods$Filter == surge,]
@@ -407,7 +392,7 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
       }
     }
   } else if (drawAlarms == 2) {
-    # Draw rectangles only on overlapping alarms
+    overlapping_surges <- find_overlapping_alarms(surge_periods = surge_periods)
     plot <- plot + geom_rect(data = overlapping_surges,
                              aes(xmin = OverlapStart, xmax = OverlapEnd,
                                  ymin = ymin_val, ymax = ymax_val, fill = Agent1),
@@ -416,6 +401,7 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
   
   return(list(plot = plot, surges = surge_periods))
 }
+
 
 find_overlapping_alarms <- function(surge_periods) {
   surge_periods <- surge_periods[order(surge_periods$Start),]
@@ -428,18 +414,13 @@ find_overlapping_alarms <- function(surge_periods) {
     stringsAsFactors = FALSE
   )
   
-  for (i in 1:nrow(surge_periods)) {
+  for (i in 1:(nrow(surge_periods)-1)) {
     current_period <- surge_periods[i,]
     
-    # Find potential overlaps
-    potential_overlaps <- surge_periods[surge_periods$Start <= current_period$End,]
-    
-    for (j in 1:nrow(potential_overlaps)) {
-      other_period <- potential_overlaps[j,]
+    for (j in (i+1):nrow(surge_periods)) {
+      other_period <- surge_periods[j,]
       
-      # Check for actual overlap
-      if (other_period$End >= current_period$Start && other_period$Filter != current_period$Filter) {
-        
+      if (other_period$Start <= current_period$End && other_period$End >= current_period$Start && other_period$Filter != current_period$Filter) {
         # Sort agents to ensure consistency in how overlaps are recorded
         agents <- sort(c(current_period$Filter, other_period$Filter))
         
@@ -452,16 +433,15 @@ find_overlapping_alarms <- function(surge_periods) {
           stringsAsFactors = FALSE
         )
         
-        # Check if this overlap is already recorded
-        if (!any(apply(overlap_info, 1, function(x) all(x == new_overlap)))) {
-          overlap_info <- rbind(overlap_info, new_overlap)
-        }
+        # Add new overlap entry without checking for duplicates because we manage overlaps in ordered, non-redundant pairs
+        overlap_info <- rbind(overlap_info, new_overlap)
       }
     }
   }
   
   return(overlap_info)
 }
+
 
 fetch_alarm_table_data <- function(data, start_datetime, end_datetime, ...) {
   agents <- unlist(list(...))

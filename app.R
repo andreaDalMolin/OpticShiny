@@ -249,9 +249,9 @@ ui <- dashboardPage(
                      selectizeInput("select_menu6", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
                      hr(),
                      h4("Timeframe"),
-                     dateInput("start_date_menu6", label = "Start Date", value = "2024-02-01", weekstart = 1),
+                     dateInput("start_date_menu6", label = "Start Date", value = "2024-03-04", weekstart = 1),
                      textInput("start_time_menu6", label = "Start Time (HH:MM)", value = "00:00"),
-                     dateInput("end_date_menu6", label = "End Date", value = "2024-02-05", weekstart = 1),
+                     dateInput("end_date_menu6", label = "End Date", value = "2024-03-14", weekstart = 1),
                      textInput("end_time_menu6", label = "End Time (HH:MM)", value = "00:00"),
                      hr(),
                      radioButtons("alarm_toggle_menu6", label = h4("Surges"),
@@ -272,12 +272,11 @@ ui <- dashboardPage(
                    ),
                    fluidRow(
                      tabBox(
-                       title = "Data insight",
-                       tabPanel("Common surges",
-                                div(style = "height: 400px; overflow-y: auto;",  # Adjust height as necessary
-                                    DTOutput("table_menu6"))),
-                       # Second tabPanel with fixed height and scrollable content
-                       tabPanel("Notable periods",
+                       title = "Data Insight",
+                       tabPanel("Common Surges",
+                                div(style = "height: 400px; overflow-y: auto;", 
+                                    uiOutput("table_menu6_ui"))),
+                       tabPanel("Notable Periods",
                                 uiOutput("selectedAgentLabel"),
                                 uiOutput("contentDisplay")  # This output will handle the conditional content
                        )
@@ -597,24 +596,34 @@ server <- function(input, output, session) {
     result$plot
   })
   
-  output$table_menu6 <- renderDT({
-    overlapping_df <- find_overlapping_alarms(surges_reactive$data)
-    
-    if (nrow(overlapping_df) > 0) {
-      colnames(overlapping_df) <- c("Agent1", "Agent2", "Overlap Start", "Overlap End")
+  output$table_menu6_ui <- renderUI({
+    # Check if the input has been initialized and is not empty; if not, prompt for selection
+    if (is.null(input$select_menu6) || length(input$select_menu6) < 2) {
+      # Display a message asking for more agents to be selected
+      tags$h3("Please select at least two agents", 
+              style = "text-align: center; margin-top: 180px;")
     } else {
-      # Create an empty dataframe with the same columns if no overlaps are found
-      overlapping_df <- data.frame(
-        Agent1 = character(),
-        Agent2 = character(),
-        OverlapStart = as.POSIXct(character()),
-        OverlapEnd = as.POSIXct(character()),
-        stringsAsFactors = FALSE
-      )
-      colnames(overlapping_df) <- c("Agent1", "Agent2", "Overlap Start", "Overlap End")
+      # Now that we know at least two agents are selected, process the data
+      req(surges_reactive$data)  # Ensure data is available
+      
+      # Proceed only if the data is not empty
+      if (nrow(surges_reactive$data) == 0) {
+        # No data available in the selected period
+        tags$h3("No data available for the selected period.", 
+                style = "text-align: center; margin-top: 180px;")
+      } else {
+        overlapping_df <- find_overlapping_alarms(surges_reactive$data)
+        if (nrow(overlapping_df) > 0) {
+          colnames(overlapping_df) <- c("Agent", "Overlaps with", "Overlap Start", "Overlap End")
+          # Render the datatable if we have overlaps
+          DT::datatable(overlapping_df, options = list(pageLength = 5))
+        } else {
+          # Handle case where there are no overlaps found
+          tags$h3("No overlaps found", 
+                  style = "text-align: center; margin-top: 180px;")
+        }
+      }
     }
-    
-    datatable(overlapping_df, options = list(pageLength = 5))
   })
 
   output$surgeDataTable <- renderDT({

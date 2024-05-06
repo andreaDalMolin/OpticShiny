@@ -358,7 +358,7 @@ server <- function(input, output, session) {
   
   observe({
     req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
-    tryCatch({
+    #tryCatch({
       heatmap_data <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
       heatmap_plots$weeklyPlots <- heatmap_data$plot_list
       
@@ -377,15 +377,15 @@ server <- function(input, output, session) {
           }
         })
       })
-    }, error = function(e) {
-      showNotification(paste("Error in weekly heatmap generation:", e$message), type = "error")
-    })
+    #}, error = function(e) {
+    #  showNotification(paste("Error in weekly heatmap generation:", e$message), type = "error")
+    #})
   })
   
   
   observe({
     req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
-    tryCatch({
+    #tryCatch({
       if (as.Date(input$end_date_cumulative) > as.Date(input$start_date_cumulative)) {
         if (difftime(as.Date(input$end_date_cumulative), as.Date(input$start_date_cumulative), units = "days") >= 14) {
           heatmap_data <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
@@ -411,9 +411,9 @@ server <- function(input, output, session) {
       } else {
         showNotification("Start date must be before end date!", type = "error")
       }
-    }, error = function(e) {
-      showNotification(paste("Error in cumulative heatmap generation:", e$message), type = "error")
-    })
+    #}, error = function(e) {
+    #  showNotification(paste("Error in cumulative heatmap generation:", e$message), type = "error")
+    #})
   })
   
   

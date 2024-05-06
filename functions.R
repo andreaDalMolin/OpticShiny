@@ -81,54 +81,67 @@ create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
   return(heatmap_data)
 }
 
-create_heatmap_for_week <- function(data, start_date, agents) {
+create_heatmap_for_week <- function(data, start_date, agents, timezone = "UTC") {
   start_date <- as.Date(start_date)
   end_date <- start_date + 6
   
+  # Extending the end time to the very start of the next day
+  filter_end_date <- as.POSIXct(paste(end_date + 1, "00:00:00"), tz = timezone)
+  
+  # Calculate a sequence of dates for the week
+  week_dates <- seq(start_date, end_date, by = "day")
+  
   plot_list <- list()
   data_list <- list()
+  
+  # Generate a full grid of all days of the week (1-7) and hours (0-23)
+  all_days_of_week <- 1:7
+  all_hours <- 0:23
+  full_grid <- expand.grid(DAY_OF_WEEK = all_days_of_week, HOUR = all_hours)
+  
+  # Create reversed date labels for correct plotting
+  date_labels <- setNames(as.character(week_dates), 1:7)
+  reverse_date_labels <- rev(date_labels)
   
   for (agent in agents) {
     agent_data <- if (agent != '' && agent != 'All agents') {
       data[data$AGENT == agent,]
     } else {
-      print("showing all agents")
       data
     }
     
-    week_data <- agent_data[agent_data$RAISETIME >= as.POSIXct(start_date) & agent_data$RAISETIME <= as.POSIXct(paste(end_date, "23:59:59")),]
+    # Filter data for the specified date range
+    timeframe_data <- agent_data %>%
+      filter(RAISETIME >= as.POSIXct(start_date, tz = timezone) & RAISETIME < filter_end_date)
     
-    week_data <- week_data %>%
-      dplyr::mutate(
-        DAY = as.factor(strftime(RAISETIME, "%Y-%m-%d")),
-        HOUR = lubridate::hour(RAISETIME)
+    # Extract DAY_OF_WEEK and HOUR
+    timeframe_data <- timeframe_data %>%
+      mutate(
+        DAY_OF_WEEK = as.integer(lubridate::wday(RAISETIME, week_start = 1)),  # Monday=1, Sunday=7
+        HOUR = as.integer(format(RAISETIME, "%H"))
       )
     
-    all_days <- seq(from = start_date, to = end_date, by = "day")
-    all_hours <- 0:23
-    full_grid <- expand.grid(DAY = all_days, HOUR = all_hours)
-    full_grid$DAY <- as.factor(strftime(full_grid$DAY, "%Y-%m-%d"))
+    # Count the number of events for each combination of DAY_OF_WEEK and HOUR
+    event_counts <- timeframe_data %>%
+      group_by(DAY_OF_WEEK, HOUR) %>%
+      summarise(Count = n(), .groups = 'drop')
     
-    event_counts <- week_data %>%
-      dplyr::group_by(DAY, HOUR) %>%
-      dplyr::summarise(Count = n(), .groups = 'drop')
-    
-    # Merge event counts with the full grid, filling in zeros where there are no events
+    # Merge with full grid and fill in zeros where there are no events
     event_counts <- full_grid %>%
-      left_join(event_counts, by = c("DAY", "HOUR")) %>%
+      left_join(event_counts, by = c("DAY_OF_WEEK", "HOUR")) %>%
       replace_na(list(Count = 0))
     
-    # Reorder DAY factor levels in descending order
-    event_counts$DAY <- factor(event_counts$DAY, levels = rev(levels(event_counts$DAY)))
+    # Replace DAY_OF_WEEK with reversed actual date labels
+    event_counts$DAY_OF_WEEK <- factor(event_counts$DAY_OF_WEEK, levels = 7:1, labels = reverse_date_labels)
     
-    # Generate the heatmap
-    p <- ggplot(event_counts, aes(x = HOUR, y = DAY, fill = Count)) +
+    # Create the heatmap plot
+    p <- ggplot(event_counts, aes(x = HOUR, y = DAY_OF_WEEK, fill = Count)) +
       geom_tile() +
       scale_x_continuous(breaks = 0:23, labels = sprintf("%02d", 0:23)) +
       scale_fill_gradientn(colors = c("#FFFFFF00", "lightblue", "darkblue"),
                            values = scales::rescale(c(0, 1, max(event_counts$Count, na.rm = TRUE))),
                            na.value = "#FFFFFF00") +
-      labs(title = sprintf("%s - Alarms from %s to %s - Number of Alarms by Hour and Day",
+      labs(title = sprintf("%s - Alarms from %s to %s - Number of Alarms by Hour and Date",
                            agent,
                            format(start_date, "%d/%m/%Y"),
                            format(end_date, "%d/%m/%Y")),
@@ -141,10 +154,9 @@ create_heatmap_for_week <- function(data, start_date, agents) {
     data_list[[agent]] <- event_counts
   }
   
-  heatmap_data <- list(plot_list = plot_list, data_list = data_list)
-  
-  return(heatmap_data)
+  return(list(plot_list = plot_list, data_list = data_list))
 }
+
 
 # The is_cumulative bool is to differentiate in graphs contruction
 merge_heatmaps <- function(data_frames, is_cumulative) {
@@ -179,7 +191,7 @@ merge_heatmaps <- function(data_frames, is_cumulative) {
            fill = "Number of Events") +
       theme_minimal()
   } else {
-    p <- ggplot(merged_data, aes(x = HOUR, y = DAY, fill = Count)) +
+    p <- ggplot(merged_data, aes(x = HOUR, y = DAY_OF_WEEK, fill = Count)) +
       geom_tile() +
       scale_x_continuous(breaks = 0:23, labels = sprintf("%02d", 0:23)) +
       scale_fill_gradientn(colors = c("#FFFFFF00", "lightblue", "darkblue"),

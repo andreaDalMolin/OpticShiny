@@ -55,11 +55,11 @@ ui <- dashboardPage(
                      solidHeader = TRUE,
                      collapsible = TRUE,
                      h4("Timeframe"),
-                     dateInput("start_date_menu1", label = "Start Date", value = Sys.Date()),
-                     dateInput("end_date_menu1", label = "End Date", value = Sys.Date()),
+                     dateInput("start_date_menu1", label = "Start Date", value = Sys.Date(), weekstart = 1),
+                     dateInput("end_date_menu1", label = "End Date", value = Sys.Date(), weekstart = 1),
                      textInput("start_time_menu1", label = "Start Time (HH:MM)", value = "12:00"),
                      textInput("end_time_menu1", label = "End Time (HH:MM)", value = "12:00"),
-                   )     
+                   )
                 ),
                 column(10,
                    shinydashboard::box(
@@ -182,8 +182,8 @@ ui <- dashboardPage(
                      selectizeInput("selectize_menu3", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
                      hr(),
                      h4("Timeframe"),
-                     dateInput("start_date_menu3", label = "Start Date", value = Sys.Date()),
-                     dateInput("end_date_menu3", label = "End Date", value = Sys.Date()),
+                     dateInput("start_date_menu3", label = "Start Date", value = Sys.Date(), weekstart = 1),
+                     dateInput("end_date_menu3", label = "End Date", value = Sys.Date(), weekstart = 1),
                      textInput("start_time_menu3", label = "Start Time (HH:MM)", value = "12:00"),
                      textInput("end_time_menu3", label = "End Time (HH:MM)", value = "12:00"),
                      selectInput("select_menu3", label = "Shown items", choices = c(5, 10, 15))
@@ -216,8 +216,8 @@ ui <- dashboardPage(
                      selectizeInput("select_menu4", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
                      hr(),
                      h4("Timeframe"),
-                     dateInput("start_date_menu4", label = "Start Date", value = Sys.Date()),
-                     dateInput("end_date_menu4", label = "End Date", value = Sys.Date()),
+                     dateInput("start_date_menu4", label = "Start Date", value = Sys.Date(), weekstart = 1),
+                     dateInput("end_date_menu4", label = "End Date", value = Sys.Date(), weekstart = 1),
                      textInput("start_time_menu4", label = "Start Time (HH:MM)", value = "12:00"),
                      textInput("end_time_menu4", label = "End Time (HH:MM)", value = "12:00")
                    )
@@ -249,9 +249,9 @@ ui <- dashboardPage(
                      selectizeInput("select_menu6", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
                      hr(),
                      h4("Timeframe"),
-                     dateInput("start_date_menu6", label = "Start Date", value = "2024-02-01"),
+                     dateInput("start_date_menu6", label = "Start Date", value = "2024-02-01", weekstart = 1),
                      textInput("start_time_menu6", label = "Start Time (HH:MM)", value = "00:00"),
-                     dateInput("end_date_menu6", label = "End Date", value = "2024-02-05"),
+                     dateInput("end_date_menu6", label = "End Date", value = "2024-02-05", weekstart = 1),
                      textInput("end_time_menu6", label = "End Time (HH:MM)", value = "00:00"),
                      hr(),
                      radioButtons("alarm_toggle_menu6", label = h4("Surges"),
@@ -358,7 +358,7 @@ server <- function(input, output, session) {
   
   observe({
     req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
-    #tryCatch({
+    tryCatch({
       heatmap_data <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
       heatmap_plots$weeklyPlots <- heatmap_data$plot_list
       
@@ -377,9 +377,9 @@ server <- function(input, output, session) {
           }
         })
       })
-    #}, error = function(e) {
-    #  showNotification(paste("Error in weekly heatmap generation:", e$message), type = "error")
-    #})
+    }, error = function(e) {
+      showNotification(paste("Error in weekly heatmap generation:", e$message), type = "error")
+    })
   })
   
   

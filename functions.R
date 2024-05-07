@@ -1,3 +1,5 @@
+##### MENU 1 #####
+
 # Function to create histogram by day of week
 create_histogram_by_day_of_week <- function(data, start_date = "2024-01-01", end_date = "2024-01-31", agent) {
   
@@ -115,17 +117,9 @@ plot_alarms_by_time_unit <- function(data, by_month = TRUE, start_date = Sys.Dat
           legend.position = "none")  # Remove legend
 }
 
+#####
 
-# Function to create bar plot by day
-create_barplot_by_day <- function(data, title_prefix) {
-  ggplot(data, aes(x = DAY_OF_WEEK)) +
-    geom_bar(stat = "count", fill = "blue", color = 'black') +
-    labs(title = paste(title_prefix, "- Number of Alarms by Day of the Week"), 
-         x = "Day of Week", 
-         y = "Number of Events") +
-    scale_x_discrete(drop = FALSE) +
-    theme_minimal()
-}
+##### MENU 2 #####
 
 create_heatmap_by_hour_day <- function(data, start_date, end_date, agents) {
   start_date <- as.Date(start_date)
@@ -265,7 +259,6 @@ create_heatmap_for_week <- function(data, start_date, agents, timezone = "UTC") 
   return(list(plot_list = plot_list, data_list = data_list))
 }
 
-
 # The is_cumulative bool is to differentiate in graphs contruction
 merge_heatmaps <- function(data_frames, is_cumulative) {
   # TODO Check that all dataframes have the same shape
@@ -354,7 +347,11 @@ generate_heatmaps_for_top_weeks <- function(data, n_weeks, day_names) {
   }
 }
 
-create_agent_alarm_bar_plot <- function(data, start_datetime, end_datetime, top_n_agents = NULL) {
+#####
+
+##### MENU 3 #####
+
+create_agent_alarm_bar_plot <- function(data, start_datetime, end_datetime, top_n_agents = NULL, agents) {
   start_datetime <- as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
   end_datetime <- as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
   
@@ -393,9 +390,58 @@ create_agent_alarm_bar_plot <- function(data, start_datetime, end_datetime, top_
     theme_minimal() +
     labs(title = paste(title_text, "from", format(start_datetime, "%Y-%m-%d %H:%M:%S"), "to", format(end_datetime, "%Y-%m-%d %H:%M:%S")), x = "Agent", y = "Number of Alarms")
   
-  
+
   print(p)
 }
+
+# TODO params match sister function but some arent necessary
+create_specific_agent_alarm_bar_plot <- function(data, start_datetime, end_datetime, top_n_agents = NULL, agents) {
+
+  start_datetime <- as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  end_datetime <- as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  
+  # Filter data by date range
+  filtered_data <- data %>%
+    filter(RAISETIME >= start_datetime & RAISETIME <= end_datetime)
+  
+  # Filter data for specific agents
+  if (!is.null(agents) && length(agents) > 0) {
+    filtered_data <- filtered_data %>%
+      filter(AGENT %in% agents)
+  } else {
+    stop("No agents specified for filtering.")
+  }
+  
+  # Group by AGENT and ORIGINALSEVERITY and summarize alarms
+  agent_alarms_severity <- filtered_data %>%
+    group_by(AGENT, ORIGINALSEVERITY) %>%
+    summarise(Alarms = n(), .groups = 'drop')
+  
+  # Calculate TotalAlarms for each AGENT
+  total_alarms_per_agent <- agent_alarms_severity %>%
+    group_by(AGENT) %>%
+    summarise(TotalAlarms = sum(Alarms), .groups = 'drop')
+  
+  # Join TotalAlarms back to the main dataset
+  agent_alarms_severity <- agent_alarms_severity %>%
+    inner_join(total_alarms_per_agent, by = "AGENT") %>%
+    mutate(AGENT = reorder(AGENT, TotalAlarms))
+  
+  # Plotting
+  p <- ggplot(agent_alarms_severity, aes(x = AGENT, y = Alarms, fill = ORIGINALSEVERITY, text = paste("Agent:", AGENT, "\nAlarms:", Alarms, "\nSeverity:", ORIGINALSEVERITY))) +
+    geom_bar(stat = "identity") +
+    coord_flip() +
+    scale_fill_manual(values = c("Critical" = "red", "Major" = "orange", "Minor" = "yellow", "Warning" = "lightblue", "Indeterminate" = "grey")) +
+    theme_minimal() +
+    labs(title = paste("Number of Alarms by Specified Agents from", format(start_datetime, "%Y-%m-%d %H:%M:%S"), "to", format(end_datetime, "%Y-%m-%d %H:%M:%S")), x = "Agent", y = "Number of Alarms")
+  
+  p
+}
+
+
+#####
+
+##### MENU 6 #####
 
 calculate_surge_periods <- function(data, start_datetime, end_datetime, customThreshold, ...) {
   start_time <- as.POSIXct(start_datetime)
@@ -549,7 +595,6 @@ find_overlapping_alarms <- function(surge_periods) {
   return(overlap_info)
 }
 
-
 fetch_alarm_table_data <- function(data, start_datetime, end_datetime, ...) {
   agents <- unlist(list(...))
   
@@ -646,6 +691,7 @@ calculate_agent_overlap_statistics <- function(data, start_datetime, end_datetim
   write.csv(surge_periods, "surge_periods.csv", row.names = FALSE)
 }
 
+#####
 
 
 ###### UNUSED   ###### 

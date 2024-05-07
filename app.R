@@ -212,14 +212,21 @@ ui <- dashboardPage(
                      status = "primary",
                      solidHeader = TRUE,
                      collapsible = TRUE,
-                     selectizeInput("selectize_menu3", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
+                     selectizeInput(
+                       "agents_menu3", 
+                       label = "Agent(s)", 
+                       choices = c("Top agents by default" = "", agent_choices),
+                       multiple = TRUE
+                     ),
                      hr(),
                      h4("Timeframe"),
                      dateInput("start_date_menu3", label = "Start Date", value = Sys.Date(), weekstart = 1),
                      dateInput("end_date_menu3", label = "End Date", value = Sys.Date(), weekstart = 1),
                      textInput("start_time_menu3", label = "Start Time (HH:MM)", value = "12:00"),
                      textInput("end_time_menu3", label = "End Time (HH:MM)", value = "12:00"),
-                     selectInput("select_menu3", label = "Shown items", choices = c(5, 10, 15))
+                     hr(),
+                     h4("Other"),
+                     sliderInput("top_agents_n", label = "Agents displayed", min = 5, max = 25, value = 10),
                    )
                 ),
                 column(10,
@@ -410,9 +417,9 @@ server <- function(input, output, session) {
   
   observe({
     req(input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)  # Ensure necessary inputs are available
-    #tryCatch({
+    tryCatch({
       if (as.Date(input$end_date_cumulative) > as.Date(input$start_date_cumulative)) {
-        if (difftime(as.Date(input$end_date_cumulative), as.Date(input$start_date_cumulative), units = "days") >= 14) {
+        if (difftime(as.Date(input$end_date_cumulative), as.Date(input$start_date_cumulative), units = "days") >= 7) {
           heatmap_data <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
           heatmap_plots$cumulativePlots <- heatmap_data$plot_list
           
@@ -434,11 +441,11 @@ server <- function(input, output, session) {
           showNotification("Date range must span at least 14 days for cumulative heatmaps.", type = "error")
         }
       } else {
-        showNotification("Start date must be before end date!", type = "error")
+        showNotification("This isn't a time machine! Start date must be before end date!", type = "error")
       }
-    #}, error = function(e) {
-    #  showNotification(paste("Error in cumulative heatmap generation:", e$message), type = "error")
-    #})
+    }, error = function(e) {
+      showNotification(paste("Error in cumulative heatmap generation:", e$message), type = "error")
+    })
   })
   
   
@@ -486,6 +493,15 @@ server <- function(input, output, session) {
   
   ###### MENU 3 ######
   
+  observe({
+    # Check if agents_menu3 has any selection
+    if (length(input$agents_menu3) > 0) {
+      shinyjs::disable("top_agents_n")
+    } else {
+      shinyjs::enable("top_agents_n")
+    }
+  })
+  
   output$menu3_output <- renderPlotly({
     
     # Check if any input is NULL or empty
@@ -519,21 +535,33 @@ server <- function(input, output, session) {
     start_datetime_formatted <- format(as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     end_datetime_formatted <- format(as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     
+    # Check if agents_menu3 has anything selected
+    if (!is.null(input$agents_menu3) && length(input$agents_menu3) > 0) {
+      plot_function <- create_specific_agent_alarm_bar_plot
+      agents <- input$agents_menu3
+    } else {
+      plot_function <- create_agent_alarm_bar_plot
+      agents <- NULL
+    }
+    
+    # Generate the plot using the selected function and parameters
     tryCatch({
-      plot <- create_agent_alarm_bar_plot(data, start_datetime_formatted, end_datetime_formatted, input$select_menu3)
-      if(is.null(plot)) {
+      plot <- plot_function(data, start_datetime_formatted, end_datetime_formatted, input$top_agents_n, agents)
+      if (is.null(plot)) {
         shiny::showNotification("Plot could not be generated. Please check the input data.", type = "error")
         return(NULL)
       }
-      div(ggplotly(plot, source = 'alarm_density', tooltip = "text"), style = "padding-bottom: 50px;") # Adding padding
+      # Return the plotly object directly
+      ggplotly(plot, source = 'alarm_density', tooltip = "text")
     }, error = function(e) {
-      # Log the error message and notify the user
+      # Error handling remains the same
       message <- paste("Error in generating plot:", e$message)
-      cat(message, "\n") # This prints the error message in the R console
+      cat(message, "\n")  # This prints the error message in the R console
       shiny::showNotification("An error occurred while generating the plot. Please check the console for more information.", type = "error")
       NULL
     })
   })
+  
   
   ###### MENU 4 ######
   

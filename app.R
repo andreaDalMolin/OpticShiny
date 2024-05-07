@@ -48,31 +48,64 @@ ui <- dashboardPage(
       tabItem(tabName = "menu1",
               fluidRow(
                 column(2,
-                   shinydashboard::box(
-                     title = "Filters",
-                     width = NULL,
-                     status = "primary",
-                     solidHeader = TRUE,
-                     collapsible = TRUE,
-                     h4("Timeframe"),
-                     dateInput("start_date_menu1", label = "Start Date", value = Sys.Date(), weekstart = 1),
-                     dateInput("end_date_menu1", label = "End Date", value = Sys.Date(), weekstart = 1),
-                     textInput("start_time_menu1", label = "Start Time (HH:MM)", value = "12:00"),
-                     textInput("end_time_menu1", label = "End Time (HH:MM)", value = "12:00"),
-                   )
+                       shinydashboard::box(
+                         title = "Filters",
+                         width = NULL,
+                         status = "primary",
+                         solidHeader = TRUE,
+                         collapsible = TRUE,
+                         selectizeInput(
+                           "select_menu1", 
+                           label = "Agent(s)", 
+                           choices = c("All agents by default" = "", agent_choices),
+                           multiple = FALSE
+                         ),
+                         hr(),
+                         h4("Timeframe"),
+                         dateInput("start_date_menu1", label = "Start Date", value = Sys.Date() %m-% months(6), weekstart = 1),
+                         dateInput("end_date_menu1", label = "End Date", value = Sys.Date(), weekstart = 1),
+                         hr(),
+                         h4("Other"),
+                         radioButtons("barplot_interval", "Interval type", c("Week", "Month"), selected = "Week")
+                       )
                 ),
                 column(10,
-                   shinydashboard::box(
-                     title = "Histogram",
-                     status = "info",
-                     solidHeader = TRUE,
-                     collapsible = TRUE,
-                     width = NULL,
-                     plotlyOutput("menu1_output")
-                   )
+                       shinydashboard::box(
+                         title = "Histogram",
+                         status = "info",
+                         solidHeader = TRUE,
+                         collapsible = TRUE,
+                         width = NULL,
+                         plotlyOutput("menu1_output")
+                       ),
+                       fluidRow(
+                         column(6,
+                                shinydashboard::box(
+                                  title = "Alarms per hour of day",
+                                  width = NULL,
+                                  status = "info",
+                                  solidHeader = TRUE,
+                                  collapsible = TRUE,
+                                  # Include any other UI elements or outputs here
+                                  plotlyOutput("alarms_by_time_of_day")
+                                )
+                         ),
+                         column(6,
+                                shinydashboard::box(
+                                  title = "Alarms per day of week",
+                                  width = NULL,
+                                  status = "info",
+                                  solidHeader = TRUE,
+                                  collapsible = TRUE,
+                                  # Include any other UI elements or outputs here
+                                  plotlyOutput("alarms_per_day_of_week")
+                                )
+                         )
+                       )
                 )
               )
-      ),
+      )
+      ,
       
       ##### MENU 2 ######
       
@@ -317,27 +350,20 @@ server <- function(input, output, session) {
   ###### MENU 1 ######
 
   output$menu1_output <- renderPlotly({
-    plot <- ggplotly(create_histogram_by_time(data, "Test Histogram"), source= "testHistogram")
+    by_month <- input$barplot_interval == "Month"
+    
+    plot <- ggplotly(plot_alarms_by_time_unit(data, by_month, input$start_date_menu1, input$end_date_menu1, input$select_menu1), source= "testHistogram")
     plot
   })
   
-  observeEvent(event_data("plotly_click", source = "testHistogram"), {
-    click_data <- event_data("plotly_click", source = "testHistogram")
-    if (!is.null(click_data)) {
-      showModal(modalDialog(
-        title = "Details",
-        p(paste("You clicked on hour:", click_data$x)),
-        p(paste("Count:", click_data$y))
-      ))
-    }
+  output$alarms_by_time_of_day <- renderPlotly({
+    plot <- ggplotly(create_histogram_by_time(data, input$start_date_menu1, input$end_date_menu1, input$select_menu1), source= "testHistogram")
+    plot
   })
   
-  observeEvent(event_data("plotly_click", source = "alarm_density"), {
-    click_data <- event_data("plotly_click", source = "alarm_density")
-    if (!is.null(click_data)) {
-      # Print the clicked bar's custom information
-      print(event_data(source = "alarm_density"))
-    }
+  output$alarms_per_day_of_week <- renderPlotly({
+    plot <- ggplotly(create_histogram_by_day_of_week(data, input$start_date_menu1, input$end_date_menu1, input$select_menu1), source= "testHistogram")
+    plot
   })
   
   ###### MENU 2 ######

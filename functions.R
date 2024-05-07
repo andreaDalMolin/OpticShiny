@@ -1,12 +1,120 @@
+# Function to create histogram by day of week
+create_histogram_by_day_of_week <- function(data, start_date = "2024-01-01", end_date = "2024-01-31", agent) {
+  
+  # Ensure RAISETIME is a datetime object
+  data$RAISETIME <- as.POSIXct(data$RAISETIME, format = "%Y-%m-%d %H:%M:%S")
+  
+  # Validate and convert start_date and end_date
+  start_date <- as.Date(start_date)
+  end_date <- as.Date(end_date)
+  
+  # Filter data to include only the specified date range
+  filtered_data <- data %>%
+    filter(RAISETIME >= start_date & RAISETIME <= end_date)
+  
+  # Further filter by agent if the agent is not null or empty
+  if (!is.null(agent) && agent != "") {
+    filtered_data <- filtered_data %>%
+      filter(AGENT == agent)
+  }
+  
+  # Create a new column to represent the day of the week from RAISETIME
+  filtered_data <- filtered_data %>%
+    mutate(DAY_OF_WEEK = as.integer(format(RAISETIME, "%u")))  # %u is ISO-8601 day of the week (1=Monday, 7=Sunday)
+  
+  # Generate a bar plot using ggplot
+  ggplot(filtered_data, aes(x = as.factor(DAY_OF_WEEK))) +
+    geom_bar(fill = "skyblue", color = "black") +
+    scale_x_discrete(breaks = 1:7, labels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")) +
+    labs(title = "Histogram by Day of Week",
+         x = "Day of Week",
+         y = "Count") +
+    theme_minimal()
+}
+
 # Function to create histogram by time
-create_histogram_by_time <- function(data, title_prefix) {
-  ggplot(data, aes(x = hour(TIME))) +
-    geom_histogram(binwidth = 1, fill = "blue", color = "black") +
-    labs(title = paste(title_prefix, "- Number of Alarms by Time of Day"),
+create_histogram_by_time <- function(data, start_date = Sys.Date() %m-% months(6), end_date = Sys.Date(), agent) {
+  
+  # Ensure RAISETIME is a datetime object
+  data$RAISETIME <- as.POSIXct(data$RAISETIME, format = "%Y-%m-%d %H:%M:%S")
+  
+  # Validate and convert start_date and end_date
+  start_date <- as.Date(start_date)
+  end_date <- as.Date(end_date)
+  
+  # Filter data to include only the specified date range
+  filtered_data <- data %>%
+    filter(RAISETIME >= start_date & RAISETIME <= end_date)
+  
+  # Further filter by agent if the agent is not null or empty
+  if (!is.null(agent) && agent != "") {
+    filtered_data <- filtered_data %>%
+      filter(AGENT == agent)
+  }
+  
+  ggplot(filtered_data, aes(x = hour(TIME))) +
+    geom_histogram(binwidth = 1, fill = "skyblue", color = "black") +
+    labs(title = paste("Number of Alarms by Time of Day"),
          x = "Hour of Day",
          y = "Frequency") +
     theme_minimal()
 }
+
+# Function to create a bar plot of alarms by month or week with customizable date range
+plot_alarms_by_time_unit <- function(data, by_month = TRUE, start_date = Sys.Date() %m-% months(6), end_date = Sys.Date(), agent) {
+  # Ensure RAISETIME is a datetime object
+  data$RAISETIME <- as.POSIXct(data$RAISETIME, format = "%Y-%m-%d %H:%M:%S")
+  
+  # Validate and convert start_date and end_date
+  start_date <- as.Date(start_date)
+  end_date <- as.Date(end_date)
+  
+  # Filter data to include only the specified date range
+  filtered_data <- data %>%
+    filter(RAISETIME >= start_date & RAISETIME <= end_date)
+  
+  # Further filter by agent if the agent is not null or empty
+  if (!is.null(agent) && agent != "") {
+    filtered_data <- filtered_data %>%
+      filter(AGENT == agent)
+  }
+  
+  # Determine the grouping by month or week
+  if (by_month) {
+    # Format as "Month Year" and use it for grouping
+    filtered_data$TimeUnit <- format(filtered_data$RAISETIME, "%B %Y")
+    filtered_data$TimeUnit <- factor(filtered_data$TimeUnit, levels = unique(filtered_data$TimeUnit[order(year(filtered_data$RAISETIME), month(filtered_data$RAISETIME))]))
+    
+    # Aggregate data by selected time unit
+    time_counts <- filtered_data %>%
+      group_by(TimeUnit) %>%
+      summarise(AlarmCount = n(), .groups = 'drop')
+  } else {
+    # Calculate the start and end of the week
+    filtered_data$WeekStart <- floor_date(filtered_data$RAISETIME, unit="week", week_start = 1)
+    filtered_data$WeekEnd <- ceiling_date(filtered_data$RAISETIME, unit="week", week_start = 1) - days(1)
+    # Group by WeekStart for aggregation
+    time_counts <- filtered_data %>%
+      group_by(WeekStart) %>%
+      summarise(AlarmCount = n(), WeekEnd = max(WeekEnd), .groups = 'drop')
+    # Create the time unit label after aggregation to avoid duplicates
+    time_counts$TimeUnit <- paste(format(time_counts$WeekStart, "%d/%m/%Y"), format(time_counts$WeekEnd, "%d/%m/%Y"), sep="-")
+    # Sort time_counts by WeekStart to ensure chronological order
+    time_counts <- time_counts[order(time_counts$WeekStart),]
+    # Set the factor levels to the ordered TimeUnit
+    time_counts$TimeUnit <- factor(time_counts$TimeUnit, levels = time_counts$TimeUnit)
+  }
+  
+  ggplot(time_counts, aes(x = TimeUnit, y = AlarmCount)) +
+    geom_bar(stat = "identity", fill = "steelblue", color = "black") +
+    theme_minimal() +
+    labs(x = if (by_month) "Month" else "Week", y = "Number of Alarms",
+         title = if (by_month) "Alarms by Month" else "Alarms by Week",
+         subtitle = paste("From", format(start_date, "%Y-%m-%d"), "to", format(end_date, "%Y-%m-%d"))) +
+    theme(axis.text.x = element_text(angle = 60, hjust = 1),  # Rotate x labels for readability
+          legend.position = "none")  # Remove legend
+}
+
 
 # Function to create bar plot by day
 create_barplot_by_day <- function(data, title_prefix) {
@@ -401,7 +509,6 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
   
   return(list(plot = plot, surges = surge_periods))
 }
-
 
 find_overlapping_alarms <- function(surge_periods) {
   surge_periods <- surge_periods[order(surge_periods$Start),]

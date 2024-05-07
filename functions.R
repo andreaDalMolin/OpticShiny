@@ -441,6 +441,36 @@ create_specific_agent_alarm_bar_plot <- function(data, start_datetime, end_datet
 
 #####
 
+##### MENU 4 #####
+
+plot_timeline_for_agent <- function(data, start_time, end_time, agents) {
+  # Convert start_time and end_time to POSIXct if they are not already
+  start_time <- as.POSIXct(start_time)
+  end_time <- as.POSIXct(end_time)
+  
+  # Filter data for the given time frame
+  filtered_data <- data[data$RAISETIME >= start_time & data$RAISETIME <= end_time, ]
+  
+  # Filter data for specific agents
+  if (!is.null(agents) && length(agents) > 0) {
+    filtered_data <- filtered_data %>%
+      filter(AGENT %in% agents)
+  } else {
+    stop("No agents specified for filtering.")
+  }
+  
+  # Plot timeline
+  p <- ggplot(filtered_data, aes(x = RAISETIME, y = AGENT)) +
+    geom_point(color = "blue", size = 3) +
+    labs(x = "Time", y = "Agent", title = "Timeline of Triggers for Agent EMMA") +
+    theme_minimal() +
+    scale_x_datetime(date_breaks = "1 hour", date_labels = "%H:%M") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  p
+}
+
+#####
+
 ##### MENU 6 #####
 
 calculate_surge_periods <- function(data, start_datetime, end_datetime, customThreshold, ...) {
@@ -738,22 +768,5 @@ extract_and_write_to_csv <- function(data, start_datetime, end_datetime, filenam
   return(extracted_data)
 }
 
-plot_timeline_for_agent <- function(data, start_time, end_time) {
-  # Convert start_time and end_time to POSIXct if they are not already
-  start_time <- as.POSIXct(start_time)
-  end_time <- as.POSIXct(end_time)
-  
-  # Filter data for the given time frame
-  filtered_data <- data[data$RAISETIME >= start_time & data$RAISETIME <= end_time, ]
-  
-  # Plot timeline
-  p <- ggplot(filtered_data, aes(x = RAISETIME, y = AGENT)) +
-    geom_point(color = "blue", size = 3) +
-    labs(x = "Time", y = "Agent", title = "Timeline of Triggers for Agent EMMA") +
-    theme_minimal() +
-    scale_x_datetime(date_breaks = "1 hour", date_labels = "%H:%M") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  
-  print(p)
-}
 
+#####

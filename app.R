@@ -253,7 +253,7 @@ ui <- dashboardPage(
                      status = "primary",
                      solidHeader = TRUE,
                      collapsible = TRUE,
-                     selectizeInput("select_menu4", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
+                     selectizeInput("agents_menu4", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
                      hr(),
                      h4("Timeframe"),
                      dateInput("start_date_menu4", label = "Start Date", value = Sys.Date(), weekstart = 1),
@@ -269,7 +269,16 @@ ui <- dashboardPage(
                       solidHeader = TRUE,
                       collapsible = TRUE,
                       width = NULL,
-                      plotlyOutput("menu4_output")
+                      conditionalPanel(
+                        condition = "input.agents_menu4 != ''",
+                        plotlyOutput("menu4_output")
+                      ),
+                      conditionalPanel(
+                        condition = "input.agents_menu4 == ''",
+                        div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
+                            h3("Please select an agent first", style = "text-align: center;")
+                        )
+                      )
                     )
                 )
               )
@@ -594,11 +603,16 @@ server <- function(input, output, session) {
     start_datetime_formatted <- format(as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     end_datetime_formatted <- format(as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     
+    # Check if the time interval is more than one day
+    if (difftime(as.POSIXct(end_datetime_formatted), as.POSIXct(start_datetime_formatted), units = "days") > 1) {
+      shiny::showNotification("The time interval must not exceed one day.", type = "error")
+      return(NULL)
+    }
+    
     # Use the formatted datetime strings in your function call
-    plot <- plot_timeline_for_agent(data, start_datetime_formatted, end_datetime_formatted)
+    plot <- plot_timeline_for_agent(data, start_datetime_formatted, end_datetime_formatted, input$agents_menu4)
     
     tryCatch({
-      plot <- plot_timeline_for_agent(data, start_datetime_formatted, end_datetime_formatted)
       if(is.null(plot)) {
         shiny::showNotification("Plot could not be generated. Please check the input data.", type = "error")
       } else {
@@ -613,9 +627,11 @@ server <- function(input, output, session) {
     })
   })
   
-  surges_reactive <- reactiveValues(data = NULL)
+  
   
   ###### MENU 6 ######
+  
+  surges_reactive <- reactiveValues(data = NULL)
   
   output$overlapping_nb <- renderText({
     if (is.null(surges_reactive$data) || nrow(surges_reactive$data) == 0) {

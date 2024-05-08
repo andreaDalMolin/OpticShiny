@@ -28,7 +28,7 @@ create_histogram_by_day_of_week <- function(data, start_date = "2024-01-01", end
   ggplot(filtered_data, aes(x = as.factor(DAY_OF_WEEK))) +
     geom_bar(fill = "skyblue", color = "black") +
     scale_x_discrete(breaks = 1:7, labels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")) +
-    labs(title = "Histogram by Day of Week",
+    labs(title = "Number of Alarms per Day of Week",
          x = "Day of Week",
          y = "Count") +
     theme_minimal()
@@ -56,7 +56,7 @@ create_histogram_by_time <- function(data, start_date = Sys.Date() %m-% months(6
   
   ggplot(filtered_data, aes(x = hour(TIME))) +
     geom_histogram(binwidth = 1, fill = "skyblue", color = "black") +
-    labs(title = paste("Number of Alarms by Time of Day"),
+    labs(title = paste("Number of Alarms per Time of Day"),
          x = "Hour of Day",
          y = "Frequency") +
     theme_minimal()
@@ -111,7 +111,7 @@ plot_alarms_by_time_unit <- function(data, by_month = TRUE, start_date = Sys.Dat
     geom_bar(stat = "identity", fill = "steelblue", color = "black") +
     theme_minimal() +
     labs(x = if (by_month) "Month" else "Week", y = "Number of Alarms",
-         title = if (by_month) "Alarms by Month" else "Alarms by Week",
+         title = if (by_month) "Alarms per Month" else "Alarms per Week",
          subtitle = paste("From", format(start_date, "%Y-%m-%d"), "to", format(end_date, "%Y-%m-%d"))) +
     theme(axis.text.x = element_text(angle = 60, hjust = 1),  # Rotate x labels for readability
           legend.position = "none")  # Remove legend
@@ -431,7 +431,7 @@ plot_timeline_for_agent <- function(data, start_time, end_time, agents) {
   # Plot timeline
   p <- ggplot(filtered_data, aes(x = RAISETIME, y = AGENT)) +
     geom_point(color = "blue", size = 3) +
-    labs(x = "Time", y = "Agent", title = "Timeline of Triggers for Agent EMMA") +
+    labs(x = "Time", y = "Agent", title = "Timeline of triggers for selected agents") +
     theme_minimal() +
     scale_x_datetime(date_breaks = "1 hour", date_labels = "%H:%M") +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -533,7 +533,7 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
     geom_ribbon(aes(ymin = Avg - StdDev, ymax = Avg + StdDev, fill = Filter), alpha = 0.2) +
     geom_point(aes(y = Count), alpha = 0.5)
   
-  if (drawAlarms == 3) {
+  if (drawAlarms == 3) { # Only show individual surges
     for(surge in unique(surge_periods$Filter)) {
       surge_data <- surge_periods[surge_periods$Filter == surge,]
       for(i in 1:nrow(surge_data)) {
@@ -544,7 +544,7 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
                                  fill = "red", alpha = 0.2, inherit.aes = FALSE)
       }
     }
-  } else if (drawAlarms == 2) {
+  } else if (drawAlarms == 2) { # Show overlapping surges
     overlapping_surges <- find_overlapping_alarms(surge_periods = surge_periods)
     if(nrow(overlapping_surges)) {
       plot <- plot + geom_rect(data = overlapping_surges,
@@ -691,53 +691,5 @@ calculate_agent_overlap_statistics <- function(data, start_datetime, end_datetim
   
   write.csv(surge_periods, "surge_periods.csv", row.names = FALSE)
 }
-
-#####
-
-
-###### UNUSED   ###### 
-
-
-plot_missing_data <- function(data) {
-  # Identify columns that are not date or time to avoid conversion issues
-  non_datetime_cols <- sapply(data, function(x) !inherits(x, "Date") && !inherits(x, "POSIXt"))
-  data_non_datetime <- data[, non_datetime_cols]
-
-  # Calculate the number of missing values per column, including NA and empty strings
-  missing_data <- sapply(data_non_datetime, function(x) sum(is.na(x) | x == ""))
-
-  # Create a data frame for plotting
-  missing_data_df <- data.frame(
-    Column = names(missing_data),
-    MissingValues = missing_data
-  ) %>%
-    arrange(desc(MissingValues)) %>%
-    filter(MissingValues > 0)  # Optional: Filter out columns with no missing data
-  
-  # Generate the plot
-  ggplot(missing_data_df, aes(x = reorder(Column, MissingValues), y = MissingValues)) +
-    geom_bar(stat = "identity", fill = "steelblue") +
-    theme_minimal() +
-    labs(title = "Missing and Empty Values per Column (Excluding Date/Time)", x = "Column", y = "Number of Missing/Empty Values") +
-    coord_flip()  # Flip coordinates to make it easier to read column names
-}
-
-extract_and_write_to_csv <- function(data, start_datetime, end_datetime, filename) {
-  # Convert start_datetime and end_datetime to POSIXct in UTC timezone
-  start_datetime <- as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-  end_datetime <- as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-  
-  # Filter data based on the provided datetime range
-  extracted_data <- data %>%
-    filter(RAISETIME >= start_datetime & RAISETIME <= end_datetime)
-  
-  # Write the extracted data to a CSV file
-  # write.csv(extracted_data, filename, row.names = FALSE, sep = ';')
-  
-  cat("Data extracted and written to", filename, "\n")
-  
-  return(extracted_data)
-}
-
 
 #####

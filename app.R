@@ -18,7 +18,7 @@ ui <- dashboardPage(
   dashboardHeader(title = "Optic Alarms Dashboard"),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Histogram", tabName = "menu1"),
+      menuItem("Alarms over time", tabName = "menu1"),
       menuItem("Heatmap", tabName = "menu2"),
       menuItem("Alarm density", tabName = "menu3"),
       menuItem("Timeline", tabName = "menu4"),
@@ -65,13 +65,13 @@ ui <- dashboardPage(
                          dateInput("start_date_menu1", label = "Start Date", value = Sys.Date() %m-% months(6), weekstart = 1),
                          dateInput("end_date_menu1", label = "End Date", value = Sys.Date(), weekstart = 1),
                          hr(),
-                         h4("Other"),
+                         h4("Other settings"),
                          radioButtons("barplot_interval", "Interval type", c("Week", "Month"), selected = "Week")
                        )
                 ),
                 column(10,
                        shinydashboard::box(
-                         title = "Histogram",
+                         title = "Alarms over time",
                          status = "info",
                          solidHeader = TRUE,
                          collapsible = TRUE,
@@ -220,12 +220,12 @@ ui <- dashboardPage(
                      ),
                      hr(),
                      h4("Timeframe"),
-                     dateInput("start_date_menu3", label = "Start Date", value = Sys.Date(), weekstart = 1),
+                     dateInput("start_date_menu3", label = "Start Date", value = Sys.Date() %m-% months(1), weekstart = 1),
                      dateInput("end_date_menu3", label = "End Date", value = Sys.Date(), weekstart = 1),
-                     textInput("start_time_menu3", label = "Start Time (HH:MM)", value = "12:00"),
-                     textInput("end_time_menu3", label = "End Time (HH:MM)", value = "12:00"),
+                     textInput("start_time_menu3", label = "Start Time (HH:MM)", value = "00:00"),
+                     textInput("end_time_menu3", label = "End Time (HH:MM)", value = "00:00"),
                      hr(),
-                     h4("Other"),
+                     h4("Other settings"),
                      sliderInput("top_agents_n", label = "Agents displayed", min = 5, max = 25, value = 10),
                    )
                 ),
@@ -256,15 +256,15 @@ ui <- dashboardPage(
                      selectizeInput("agents_menu4", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
                      hr(),
                      h4("Timeframe"),
-                     dateInput("start_date_menu4", label = "Start Date", value = Sys.Date(), weekstart = 1),
+                     dateInput("start_date_menu4", label = "Start Date", value = Sys.Date() %m-% days(1), weekstart = 1),
                      dateInput("end_date_menu4", label = "End Date", value = Sys.Date(), weekstart = 1),
-                     textInput("start_time_menu4", label = "Start Time (HH:MM)", value = "12:00"),
-                     textInput("end_time_menu4", label = "End Time (HH:MM)", value = "12:00")
+                     textInput("start_time_menu4", label = "Start Time (HH:MM)", value = "00:00"),
+                     textInput("end_time_menu4", label = "End Time (HH:MM)", value = "00:00")
                    )
                 ),
                 column(10,
                     shinydashboard::box(
-                      title = "Alarm timeline",
+                      title = "Alarms timeline",
                       status = "info",
                       solidHeader = TRUE,
                       collapsible = TRUE,
@@ -298,9 +298,9 @@ ui <- dashboardPage(
                      selectizeInput("select_menu6", label = "Agent(s)", choices = agent_choices, multiple = TRUE),
                      hr(),
                      h4("Timeframe"),
-                     dateInput("start_date_menu6", label = "Start Date", value = "2024-03-04", weekstart = 1),
+                     dateInput("start_date_menu6", label = "Start Date", value = Sys.Date() %m-% months(6), weekstart = 1),
                      textInput("start_time_menu6", label = "Start Time (HH:MM)", value = "00:00"),
-                     dateInput("end_date_menu6", label = "End Date", value = "2024-03-14", weekstart = 1),
+                     dateInput("end_date_menu6", label = "End Date", value = Sys.Date(), weekstart = 1),
                      textInput("end_time_menu6", label = "End Time (HH:MM)", value = "00:00"),
                      hr(),
                      radioButtons("alarm_toggle_menu6", label = h4("Surges"),
@@ -312,21 +312,12 @@ ui <- dashboardPage(
                 ),
                 column(10,
                    shinydashboard::box(
-                     title = "Alarm timeline",
+                     title = "Alarms timeline",
                      status = "info",
                      solidHeader = TRUE,
                      collapsible = TRUE,
                      width = NULL,
-                     conditionalPanel(
-                       condition = "input.select_menu6 != ''",
-                       plotlyOutput("menu6_output")
-                     ),
-                     conditionalPanel(
-                       condition = "input.select_menu6 == ''",
-                       div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
-                           h3("Please select an agent first", style = "text-align: center;")
-                       )
-                     )
+                     uiOutput("dynamic_menu6_output")
                    ),
                    fluidRow(
                      tabBox(
@@ -334,7 +325,7 @@ ui <- dashboardPage(
                        tabPanel("Common Surges",
                                 div(style = "height: 400px; overflow-y: auto;", 
                                     uiOutput("table_menu6_ui"))),
-                       tabPanel("Notable Periods",
+                       tabPanel("Historical surges overlaps",
                                 uiOutput("selectedAgentLabel"),
                                 uiOutput("contentDisplay")  # This output will handle the conditional content
                        )
@@ -647,35 +638,61 @@ server <- function(input, output, session) {
   
   output$overlapping_nb <- renderText({
     if (is.null(surges_reactive$data) || nrow(surges_reactive$data) == 0) {
-      return("No overlaps found.")
+      return("No surges overlaps found.")
     } else {
       return(paste("Total number of surges found:", nrow(surges_reactive$data)))
     }
   })
   
+  output$dynamic_menu6_output <- renderUI({
+    if (!is.null(input$select_menu6) && length(input$select_menu6) > 0) {
+      if (exists("result$plot")) {
+        plotlyOutput("menu6_output")
+      } else {
+        div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
+            h3("Insufficient data, please select a larger timeframe", style = "text-align: center;")
+        )
+      }
+    } else {
+      div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
+          h3("Please select an agent first", style = "text-align: center;")
+      )
+    }
+  })
+  
+  
   output$menu6_output <- renderPlotly({
-    
     # Combine the date and time into a single datetime string
     start_datetime <- paste(input$start_date_menu6, input$start_time_menu6)
     end_datetime <- paste(input$end_date_menu6, input$end_time_menu6)
-
+    
     # Format the datetime strings
     start_datetime_formatted <- format(as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     end_datetime_formatted <- format(as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
-
-    result <- do.call(create_line_plot_alarm, 
-                    list(data = data, 
-                         start_datetime = start_datetime_formatted, 
-                         end_datetime = end_datetime_formatted, 
-                         input$slider_menu6,
-                         input$alarm_toggle_menu6,
-                         input$select_menu6))
     
-    # Update the reactive value with the surge data
+    result <- tryCatch({
+      do.call(create_line_plot_alarm, 
+              list(data = data, 
+                   start_datetime = start_datetime_formatted, 
+                   end_datetime = end_datetime_formatted, 
+                   input$slider_menu6,
+                   input$alarm_toggle_menu6,
+                   input$select_menu6))
+    }, error = function(e) {
+      NULL  # Return NULL if an error occurs
+    })
+    
+    if (is.null(result)) {
+      shiny::showNotification("Insufficient data, please select a larger timeframe", type = "error")
+      return(NULL)
+    }
+    
+    # Update the reactive value with the surge data, assuming this part is needed and works correctly outside this snippet
     surges_reactive$data <- result$surges
     
     result$plot
   })
+  
   
   output$table_menu6_ui <- renderUI({
     # Check if the input has been initialized and is not empty; if not, prompt for selection
@@ -700,7 +717,7 @@ server <- function(input, output, session) {
           DT::datatable(overlapping_df, options = list(pageLength = 5))
         } else {
           # Handle case where there are no overlaps found
-          tags$h3("No overlaps found", 
+          tags$h3("No surges overlaps found", 
                   style = "text-align: center; margin-top: 180px;")
         }
       }
@@ -735,7 +752,7 @@ server <- function(input, output, session) {
     req(input$select_menu6)
     if (length(input$select_menu6) > 0) {
       selected_agent <- input$select_menu6[1]
-      h4("Notable periods for the agent:", strong(selected_agent), style = "margin-bottom: 10px;")
+      h4("Historical surges overlaps for the agent:", strong(selected_agent), style = "margin-bottom: 10px;")
     } else {
       return(NULL)
     }
@@ -765,7 +782,7 @@ server <- function(input, output, session) {
     
     # Return a styled HTML output
     HTML(sprintf(
-      '<div style="padding-bottom: 10px;"><h4 style="font-size: 16px;">Notable periods for the agent: <strong>%s</strong></h4></div>',
+      '<div style="padding-bottom: 10px;"><h4 style="font-size: 16px;">Historical surges overlaps for the agent: <strong>%s</strong></h4></div>',
       selected_agent
     ))
   })
@@ -799,7 +816,7 @@ server <- function(input, output, session) {
     datatable(formatted_summarized_data, selection = 'single', rownames = FALSE, options = list(
       dom = 't', # This option is to remove the datatable's controls and only show the table
       paging = FALSE,
-      searching = FALSE,
+      searching = TRUE,
       info = FALSE
     ))
   }, server = FALSE)

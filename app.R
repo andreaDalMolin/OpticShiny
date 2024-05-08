@@ -295,7 +295,7 @@ ui <- dashboardPage(
                      status = "primary",
                      solidHeader = TRUE,
                      collapsible = TRUE,
-                     selectizeInput("select_menu6", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
+                     selectizeInput("select_menu6", label = "Agent(s)", choices = agent_choices, multiple = TRUE),
                      hr(),
                      h4("Timeframe"),
                      dateInput("start_date_menu6", label = "Start Date", value = "2024-03-04", weekstart = 1),
@@ -317,7 +317,16 @@ ui <- dashboardPage(
                      solidHeader = TRUE,
                      collapsible = TRUE,
                      width = NULL,
-                     plotlyOutput("menu6_output"),
+                     conditionalPanel(
+                       condition = "input.select_menu6 != ''",
+                       plotlyOutput("menu6_output")
+                     ),
+                     conditionalPanel(
+                       condition = "input.select_menu6 == ''",
+                       div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
+                           h3("Please select an agent first", style = "text-align: center;")
+                       )
+                     )
                    ),
                    fluidRow(
                      tabBox(
@@ -349,6 +358,9 @@ ui <- dashboardPage(
                        #height = 400,
                        solidHeader = TRUE,
                        collapsible = TRUE,
+                       div(style = "display: flex; justify-content: center; align-items: center; height: 150px;",
+                           h3("Feature coming 😊", style = "text-align: center;")
+                       )
                      )
                    )
                 )
@@ -643,9 +655,8 @@ server <- function(input, output, session) {
   
   output$menu6_output <- renderPlotly({
     
-    # Combine the date and start time into a single datetime string
+    # Combine the date and time into a single datetime string
     start_datetime <- paste(input$start_date_menu6, input$start_time_menu6)
-    # Combine the date and end time into a single datetime string
     end_datetime <- paste(input$end_date_menu6, input$end_time_menu6)
 
     # Format the datetime strings

@@ -316,37 +316,6 @@ merge_heatmaps <- function(data_frames, is_cumulative) {
   return(plot_list)
 }
 
-generate_heatmaps_for_top_weeks <- function(data, n_weeks, day_names) {
-  # Specify the directory to save the plots
-  plot_directory <- "Data/Output/R Graphs/"
-  if (!dir.exists(plot_directory)) {
-    dir.create(plot_directory, recursive = TRUE)
-  }
-  
-  # Aggregate data to count events per week
-  events_per_week <- data %>%
-    group_by(WEEK) %>%
-    summarise(Events = n(), .groups = 'drop') %>%
-    arrange(desc(Events)) %>%
-    slice(1:n_weeks)  # Select the top N weeks with the most events
-  
-  # Extract the WEEK values for these top weeks
-  interesting_weeks <- events_per_week$WEEK
-  
-  # Generate and save heatmaps for the top N interesting weeks
-  for (week in interesting_weeks) {
-    week_data <- data[data$WEEK == week,]
-    p <- create_heatmap_by_hour_day(week_data, sprintf("Week %d", week), day_names)
-    
-    # Construct a filename for each plot
-    plot_filename <- sprintf("Week_%d_Heatmap.png", week)
-    full_plot_path <- file.path(plot_directory, plot_filename)
-    
-    # Save the plot using ggsave
-    ggsave(full_plot_path, plot = p, width = 10, height = 8, dpi = 300)
-  }
-}
-
 #####
 
 ##### MENU 3 #####
@@ -577,10 +546,12 @@ create_line_plot_alarm <- function(data, start_datetime, end_datetime, customThr
     }
   } else if (drawAlarms == 2) {
     overlapping_surges <- find_overlapping_alarms(surge_periods = surge_periods)
-    plot <- plot + geom_rect(data = overlapping_surges,
-                             aes(xmin = OverlapStart, xmax = OverlapEnd,
-                                 ymin = ymin_val, ymax = ymax_val, fill = Agent1),
-                             alpha = 0.3, inherit.aes = FALSE)
+    if(nrow(overlapping_surges)) {
+      plot <- plot + geom_rect(data = overlapping_surges,
+                               aes(xmin = OverlapStart, xmax = OverlapEnd,
+                                   ymin = ymin_val, ymax = ymax_val, fill = Agent1),
+                               alpha = 0.3, inherit.aes = FALSE)
+    }
   }
   
   return(list(plot = plot, surges = surge_periods))

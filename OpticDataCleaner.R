@@ -8,7 +8,7 @@ library(purrr)
 ###################
 
 # List all files in the directory that match the naming pattern "Optic_202x_[month_number].csv"
-data_files <- list.files(path = "../../../../Optic Alarms 2023-2024/CSV", pattern = "Optic_202[0-9]_[0-9]{2}.csv", full.names = TRUE, recursive = TRUE)
+data_files <- list.files(path = "../../../../Optic Alarms 2023-2024/New", pattern = "Optic_202[0-9]_[0-9]{2}.csv", full.names = TRUE, recursive = TRUE)
 
 # Load the data from CSV files
 data_list <- lapply(data_files, function(file) read.csv(file, header = TRUE, sep = ';'))
@@ -26,7 +26,7 @@ data$FIRSTOCCURRENCE <- dmy_hms(data$FIRSTOCCURRENCE)
 data_sorted <- data %>% arrange(RAISETIME)
 
 # ADJUST THE DATES ACCORDINGLY !
-data_in_bounds <- data_sorted %>% filter(RAISETIME >= as.Date("2023-01-01") & RAISETIME <= "2024-04-02")
+data_in_bounds <- data_sorted %>% filter(RAISETIME >= as.Date("2023-01-01") & RAISETIME <= "2024-05-30")
 
 
 ###################

@@ -1,14 +1,9 @@
-library(shiny)
-library(shinydashboard)
-library(bslib)
-library(plotly)
-library(shinyjs)
-library(DT)
-library(shinycssloaders)
-
 source("global.R")
 source("functions.R")
 source("data_preparation.R")
+
+options(shiny.host = "0.0.0.0")
+options(shiny.port = 8180)
 
 agent_choices <- c(sort(unique(data$AGENT)))
 
@@ -298,7 +293,7 @@ ui <- dashboardPage(
                      selectizeInput("select_menu6", label = "Agent(s)", choices = agent_choices, multiple = TRUE),
                      hr(),
                      h4("Timeframe"),
-                     dateInput("start_date_menu6", label = "Start Date", value = Sys.Date() %m-% months(6), weekstart = 1),
+                     dateInput("start_date_menu6", label = "Start Date", value = Sys.Date() - 14, weekstart = 1),
                      textInput("start_time_menu6", label = "Start Time (HH:MM)", value = "00:00"),
                      dateInput("end_date_menu6", label = "End Date", value = Sys.Date(), weekstart = 1),
                      textInput("end_time_menu6", label = "End Time (HH:MM)", value = "00:00"),
@@ -312,12 +307,21 @@ ui <- dashboardPage(
                 ),
                 column(10,
                    shinydashboard::box(
-                     title = "Alarms timeline",
+                     title = "Alarm timeline",
                      status = "info",
                      solidHeader = TRUE,
                      collapsible = TRUE,
                      width = NULL,
-                     uiOutput("dynamic_menu6_output")
+                     conditionalPanel(
+                       condition = "input.select_menu6 != ''",
+                       plotlyOutput("menu6_output")
+                     ),
+                     conditionalPanel(
+                       condition = "input.select_menu6 == ''",
+                       div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
+                           h3("Please select an agent first", style = "text-align: center;")
+                       )
+                     )
                    ),
                    fluidRow(
                      tabBox(
@@ -644,24 +648,8 @@ server <- function(input, output, session) {
     }
   })
   
-  output$dynamic_menu6_output <- renderUI({
-    if (!is.null(input$select_menu6) && length(input$select_menu6) > 0) {
-      if (exists("result$plot")) {
-        plotlyOutput("menu6_output")
-      } else {
-        div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
-            h3("Insufficient data, please select a larger timeframe", style = "text-align: center;")
-        )
-      }
-    } else {
-      div(style = "display: flex; justify-content: center; align-items: center; height: 300px;",
-          h3("Please select an agent first", style = "text-align: center;")
-      )
-    }
-  })
-  
-  
   output$menu6_output <- renderPlotly({
+    
     # Combine the date and time into a single datetime string
     start_datetime <- paste(input$start_date_menu6, input$start_time_menu6)
     end_datetime <- paste(input$end_date_menu6, input$end_time_menu6)
@@ -670,24 +658,15 @@ server <- function(input, output, session) {
     start_datetime_formatted <- format(as.POSIXct(start_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     end_datetime_formatted <- format(as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     
-    result <- tryCatch({
-      do.call(create_line_plot_alarm, 
-              list(data = data, 
-                   start_datetime = start_datetime_formatted, 
-                   end_datetime = end_datetime_formatted, 
-                   input$slider_menu6,
-                   input$alarm_toggle_menu6,
-                   input$select_menu6))
-    }, error = function(e) {
-      NULL  # Return NULL if an error occurs
-    })
+    result <- do.call(create_line_plot_alarm, 
+                      list(data = data, 
+                           start_datetime = start_datetime_formatted, 
+                           end_datetime = end_datetime_formatted, 
+                           input$slider_menu6,
+                           input$alarm_toggle_menu6,
+                           input$select_menu6))
     
-    if (is.null(result)) {
-      shiny::showNotification("Insufficient data, please select a larger timeframe", type = "error")
-      return(NULL)
-    }
-    
-    # Update the reactive value with the surge data, assuming this part is needed and works correctly outside this snippet
+    # Update the reactive value with the surge data
     surges_reactive$data <- result$surges
     
     result$plot

@@ -5,8 +5,6 @@ source("data_preparation.R")
 options(shiny.host = "0.0.0.0")
 options(shiny.port = 8180)
 
-agent_choices <- c(sort(unique(data$AGENT)))
-
 
 # Define UI
 ui <- dashboardPage(
@@ -49,12 +47,7 @@ ui <- dashboardPage(
                          status = "primary",
                          solidHeader = TRUE,
                          collapsible = TRUE,
-                         selectizeInput(
-                           "select_menu1", 
-                           label = "Agent(s)", 
-                           choices = c("All agents by default" = "", agent_choices),
-                           multiple = FALSE
-                         ),
+                         uiOutput("menu1Selector"),
                          hr(),
                          h4("Timeframe"),
                          dateInput("start_date_menu1", label = "Start Date", value = Sys.Date() %m-% months(6), weekstart = 1),
@@ -113,12 +106,7 @@ ui <- dashboardPage(
                          status = "primary",
                          solidHeader = TRUE,
                          collapsible = TRUE,
-                         selectizeInput(
-                           "select_menu2", 
-                           label = "Agent(s)", 
-                           choices = data.frame(All=c("All agents"),Agents=agent_choices),
-                           multiple = TRUE
-                         ),
+                         uiOutput("menu2Selector"),
                          hr(),
                          h4("Heatmap settings"),
                          radioButtons("radio_btn", label = "Heatmap Type", choices = c("Weekly" = "Weekly", "Cumulative" = "Cumulative")),
@@ -207,12 +195,7 @@ ui <- dashboardPage(
                      status = "primary",
                      solidHeader = TRUE,
                      collapsible = TRUE,
-                     selectizeInput(
-                       "agents_menu3", 
-                       label = "Agent(s)", 
-                       choices = c("Top agents by default" = "", agent_choices),
-                       multiple = TRUE
-                     ),
+                     uiOutput("menu3Selector"),
                      hr(),
                      h4("Timeframe"),
                      dateInput("start_date_menu3", label = "Start Date", value = Sys.Date() %m-% months(1), weekstart = 1),
@@ -248,7 +231,7 @@ ui <- dashboardPage(
                      status = "primary",
                      solidHeader = TRUE,
                      collapsible = TRUE,
-                     selectizeInput("agents_menu4", label = "Agent(s)", choices = unique(data$AGENT), multiple = TRUE),
+                     uiOutput("menu4Selector"),
                      hr(),
                      h4("Timeframe"),
                      dateInput("start_date_menu4", label = "Start Date", value = Sys.Date() %m-% days(1), weekstart = 1),
@@ -290,7 +273,7 @@ ui <- dashboardPage(
                      status = "primary",
                      solidHeader = TRUE,
                      collapsible = TRUE,
-                     selectizeInput("select_menu6", label = "Agent(s)", choices = agent_choices, multiple = TRUE),
+                     uiOutput("menu6Selector"),
                      hr(),
                      h4("Timeframe"),
                      dateInput("start_date_menu6", label = "Start Date", value = Sys.Date() - 14, weekstart = 1),
@@ -370,22 +353,63 @@ ui <- dashboardPage(
 # Define server logic
 server <- function(input, output, session) {
   
+  # Reactive polling to refresh data
+  data <- reactive({
+    invalidateLater(60000, session)  # Adjust time as needed, e.g., 60000 ms = 1 minute
+    print("Refreshing data .............")
+    load_data()  # Call the function to load data
+  })
+  
+  # Define the reactive expression for agent choices
+  agent_choices <- reactive({
+    agents <- sort(unique(data()$AGENT))
+    if (length(agents) == 0) {
+      agents <- c("No available agents" = "")
+    } else {
+      agents
+    }
+    agents
+  })
+  
+  # Dynamic UI for select_menu6
+  output$menu6Selector <- renderUI({
+    selectizeInput("select_menu6", label = "Agent(s)", choices = c("All agents by default" = "", agent_choices()), multiple = TRUE)
+  })
+  
+  # Dynamic UI for agents_menu3
+  output$menu3Selector <- renderUI({
+    selectizeInput("agents_menu3", label = "Agent(s)", choices = c("Top agents by default" = "", agent_choices()), multiple = TRUE)
+  })
+  
+  # Dynamic UI for select_menu2
+  output$menu2Selector <- renderUI({
+    # Handle data frame creation directly here
+    choices_df <- data.frame(All = c("All agents"), Agents = agent_choices())
+    selectizeInput("select_menu2", label = "Agent(s)", choices = choices_df, multiple = TRUE)
+  })
+  
+  # Dynamic UI for select_menu1
+  output$menu1Selector <- renderUI({
+    selectizeInput("select_menu1", label = "Agent(s)", choices = c("All agents by default" = "", agent_choices()), multiple = FALSE)
+  })
+  
+  
   ###### MENU 1 ######
 
   output$menu1_output <- renderPlotly({
     by_month <- input$barplot_interval == "Month"
     
-    plot <- ggplotly(plot_alarms_by_time_unit(data, by_month, input$start_date_menu1, input$end_date_menu1, input$select_menu1), source= "testHistogram")
+    plot <- ggplotly(plot_alarms_by_time_unit(data(), by_month, input$start_date_menu1, input$end_date_menu1, input$select_menu1), source= "testHistogram")
     plot
   })
   
   output$alarms_by_time_of_day <- renderPlotly({
-    plot <- ggplotly(create_histogram_by_time(data, input$start_date_menu1, input$end_date_menu1, input$select_menu1), source= "testHistogram")
+    plot <- ggplotly(create_histogram_by_time(data(), input$start_date_menu1, input$end_date_menu1, input$select_menu1), source= "testHistogram")
     plot
   })
   
   output$alarms_per_day_of_week <- renderPlotly({
-    plot <- ggplotly(create_histogram_by_day_of_week(data, input$start_date_menu1, input$end_date_menu1, input$select_menu1), source= "testHistogram")
+    plot <- ggplotly(create_histogram_by_day_of_week(data(), input$start_date_menu1, input$end_date_menu1, input$select_menu1), source= "testHistogram")
     plot
   })
   
@@ -407,7 +431,7 @@ server <- function(input, output, session) {
   observe({
     req(input$start_date_weekly, input$select_menu2)  # Ensure necessary inputs are available
     tryCatch({
-      heatmap_data <- create_heatmap_for_week(data, input$start_date_weekly, input$select_menu2)
+      heatmap_data <- create_heatmap_for_week(data(), input$start_date_weekly, input$select_menu2)
       heatmap_plots$weeklyPlots <- heatmap_data$plot_list
       
       if (input$merge_toggle) {
@@ -436,7 +460,7 @@ server <- function(input, output, session) {
     tryCatch({
       if (as.Date(input$end_date_cumulative) > as.Date(input$start_date_cumulative)) {
         if (difftime(as.Date(input$end_date_cumulative), as.Date(input$start_date_cumulative), units = "days") >= 7) {
-          heatmap_data <- create_heatmap_by_hour_day(data, input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
+          heatmap_data <- create_heatmap_by_hour_day(data(), input$start_date_cumulative, input$end_date_cumulative, input$select_menu2)
           heatmap_plots$cumulativePlots <- heatmap_data$plot_list
           
           if (input$merge_toggle) {
@@ -562,7 +586,7 @@ server <- function(input, output, session) {
     
     # Generate the plot using the selected function and parameters
     tryCatch({
-      plot <- plot_function(data, start_datetime_formatted, end_datetime_formatted, input$top_agents_n, agents)
+      plot <- plot_function(data(), start_datetime_formatted, end_datetime_formatted, input$top_agents_n, agents)
       if (is.null(plot)) {
         shiny::showNotification("Plot could not be generated. Please check the input data.", type = "error")
         return(NULL)
@@ -617,7 +641,7 @@ server <- function(input, output, session) {
     }
     
     # Use the formatted datetime strings in your function call
-    plot <- plot_timeline_for_agent(data, start_datetime_formatted, end_datetime_formatted, input$agents_menu4)
+    plot <- plot_timeline_for_agent(data(), start_datetime_formatted, end_datetime_formatted, input$agents_menu4)
     
     tryCatch({
       if(is.null(plot)) {
@@ -659,7 +683,7 @@ server <- function(input, output, session) {
     end_datetime_formatted <- format(as.POSIXct(end_datetime, format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     
     result <- do.call(create_line_plot_alarm, 
-                      list(data = data, 
+                      list(data = data(), 
                            start_datetime = start_datetime_formatted, 
                            end_datetime = end_datetime_formatted, 
                            input$slider_menu6,
@@ -720,7 +744,7 @@ server <- function(input, output, session) {
     end_datetime <- format(as.POSIXct(paste(input$end_date_menu6, input$end_time_menu6), format = "%Y-%m-%d %H:%M"), "%Y-%m-%d %H:%M:%S")
     
     # Assuming concurrent_surge_agents returns a dataframe
-    surgesPerAgent <- concurrent_surge_agents(data, start_datetime, end_datetime, input$slider_menu6)
+    surgesPerAgent <- concurrent_surge_agents(data(), start_datetime, end_datetime, input$slider_menu6)
     output$surgeDataTable <- DT::renderDT({
       datatable(surgesPerAgent, options = list(pageLength = 5))
     })

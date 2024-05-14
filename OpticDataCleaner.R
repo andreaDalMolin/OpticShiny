@@ -24,7 +24,10 @@ export_monthly_csv <- function(data) {
   data <- data %>%
     mutate(YearMonth = format(RAISETIME, "%Y_%m"),
            RAISETIME = as.POSIXct(RAISETIME, tz = "UTC", origin = "1970-01-01")) %>%
-    mutate(across(where(is.character), ~ gsub("\r|\n", " ", iconv(.x, to = "UTF-8"))))
+    mutate(across(where(is.character), ~ gsub("\r|\n", " ", iconv(.x, to = "UTF-8")))) %>%
+    mutate(across(where(is.character), ~ gsub("'", "''", .x))) %>%
+    mutate(across(where(is.character), ~ gsub(";", ",", .x)))
+  
   
   monthly_data <- split(data, data$YearMonth)
   

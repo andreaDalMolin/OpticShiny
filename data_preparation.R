@@ -1,3 +1,9 @@
+library(readr)
+library(readxl)
+library(dplyr)
+library(purrr)
+library(lubridate)
+
 source("OpticDataCleaner.R")
 
 ##########################
@@ -9,7 +15,6 @@ load_data <- function() {
   refresh_data_files()
   
   # List all files in the directory that match the naming pattern "Optic_202x_[month_number].csv"
-  # ADD A SLASH AT THE START OF THE PATH TO RUN IN DOCKER
   data_files <- list.files(path = "home/shiny-app/Data/CSV", pattern = "Optic_202[0-9]_[0-9]{2}.csv", full.names = TRUE, recursive = TRUE)
   
   # Load the data from CSV files
@@ -17,7 +22,6 @@ load_data <- function() {
   
   # Combine all data frames into one data frame
   data <- do.call(rbind, data_list)
-  
   
   ##########################
   ##### PREPPING DATA ######
@@ -45,6 +49,22 @@ load_data <- function() {
   # Assuming 'days_of_week' and 'day_names' are defined as before
   data$DAY_OF_WEEK <- sapply(weekdays(data$DATE), function(x) days_of_week[x])
   
+  # Write imported files to LIVEDATA.txt avoiding duplicates
+  imported_files_path <- "LIVEDATA.txt"
+  existing_imported_files <- if (file.exists(imported_files_path)) readLines(imported_files_path) else character()
+  new_imported_files <- setdiff(basename(data_files), existing_imported_files)
+  
+  if (length(new_imported_files) > 0) {
+    con <- file(imported_files_path, open = "a")
+    tryCatch({
+      writeLines(new_imported_files, con)
+    }, finally = {
+      close(con)
+    })
+  }
+  
   data
 }
 
+
+data <- load_data()

@@ -355,7 +355,7 @@ server <- function(input, output, session) {
   
   # Reactive polling to refresh data
   data <- reactive({
-    invalidateLater(10000, session)  # Adjust time as needed
+    invalidateLater(60000, session)  # Adjust time as needed
     print("Refreshing data .............")
     load_data()  # Call the function to load data
   })

@@ -5,6 +5,7 @@ refresh_data_files <- function() {
   source_files_directory <- "../../../../Optic Alarms 2023-2024/New"
   destination_directory <- "home/shiny-app/Data/CSV"
   processed_files_path <- "IMPORTED_FILES.txt"
+  exported_files_path <- "EXPORTED_FILES.txt"
   column_types <- rep("text", 36)
   
   # Read already processed files
@@ -36,6 +37,8 @@ refresh_data_files <- function() {
       mutate(YearMonth = format(as.POSIXct(RAISETIME, format = "%d/%m/%Y %H:%M:%S", tz = "UTC"), "%Y_%m")) %>%
       split(.$YearMonth)
     
+    exported_files <- character()
+    
     walk(names(data), function(month) {
       filename <- file.path(destination_directory, paste0("Optic_", month, ".csv"))
       
@@ -46,7 +49,24 @@ refresh_data_files <- function() {
       }
       
       write.csv(data[[month]], filename, row.names = FALSE)
+      exported_files <<- c(exported_files, basename(filename))
     })
+    
+    # Read already exported files
+    existing_exported_files <- if (file.exists(exported_files_path)) readLines(exported_files_path) else character()
+    
+    # Determine new files to write
+    new_exported_files <- setdiff(exported_files, existing_exported_files)
+    
+    if (length(new_exported_files) > 0) {
+      # Write new exported files to EXPORTED_FILES.txt
+      con <- file(exported_files_path, open = "a")
+      tryCatch({
+        writeLines(new_exported_files, con)
+      }, finally = {
+        close(con)
+      })
+    }
   }
   
   # Get new files to process
@@ -55,33 +75,33 @@ refresh_data_files <- function() {
   
   if (length(new_files) == 0) {
     message("No new files to process.")
-    return()
+    return(invisible())
   }
   
-  message("New files to process: ", paste(new_files, collapse = ", "))
+  # message("New files to process: ", paste(new_files, collapse = ", "))
   
   # Read and combine new data files
   data_list <- map(file.path(source_files_directory, new_files), read_and_clean_excel)
   data_list <- map(data_list, convert_to_character)  # Ensure all data is character type
   
-  # Print data summary for debugging
-  print("Data summary before binding rows:")
-  print(lapply(data_list, summary))
+  # # Print data summary for debugging
+  # print("Data summary before binding rows:")
+  # print(lapply(data_list, summary))
   
   data <- bind_rows(data_list)
   
-  # Print combined data summary for debugging
-  print("Combined data summary:")
-  print(summary(data))
+  # # Print combined data summary for debugging
+  # print("Combined data summary:")
+  # print(summary(data))
   
   # Convert RAISETIME to POSIXct for filtering
   data <- data %>%
     mutate(RAISETIME = as.POSIXct(RAISETIME, format = "%d/%m/%Y %H:%M:%S", tz = "UTC")) %>%
     filter(RAISETIME >= start_date, RAISETIME <= Sys.time())
   
-  # Print filtered data summary for debugging
-  print("Filtered data summary:")
-  print(summary(data))
+  # # Print filtered data summary for debugging
+  # print("Filtered data summary:")
+  # print(summary(data))
   
   # Revert RAISETIME to text for export
   data <- data %>%

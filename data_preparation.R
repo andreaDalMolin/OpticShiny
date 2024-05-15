@@ -1,8 +1,12 @@
+source("OpticDataCleaner.R")
+
 ##########################
 ###### LOADING DATA ######
 ##########################
 
 load_data <- function() {
+  
+  refresh_data_files()
   
   # List all files in the directory that match the naming pattern "Optic_202x_[month_number].csv"
   # ADD A SLASH AT THE START OF THE PATH TO RUN IN DOCKER
@@ -19,7 +23,7 @@ load_data <- function() {
   ##### PREPPING DATA ######
   ##########################
   
-  data$RAISETIME <- ymd_hms(data$RAISETIME)
+  data$RAISETIME <- dmy_hms(data$RAISETIME)
   data$DATE <- as.Date(data$RAISETIME)
   data$TIME <- format(data$RAISETIME, "%H:%M:%S")
   data$TIME <- as.POSIXct(data$TIME, format = "%H:%M:%S")

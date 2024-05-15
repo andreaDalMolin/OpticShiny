@@ -1,133 +1,107 @@
-###################
-#### CONFIGURATION SETUP ####
-###################
-
-# Parameters
-start_date <- as.Date("2020-01-01")  # Parameter for the start date
-source_files_directory <- "../../../../Optic Alarms 2023-2024/New"  # Source files directory
-destination_directory <- "home/shiny-app/Data/CSV"  # Destination directory for CSV files
-processed_files_path <- "IMPORTED_FILES.txt"  # Path to the file tracking previously processed files
-
-###################
-#### FILE TRACKING SETUP ####
-###################
-
-processed_files <- if (file.exists(processed_files_path)) readLines(processed_files_path) else character()
-
-###################
-#### EXPORTING FUNCTION DEFINITION ####
-###################
-
-export_monthly_csv <- function(data) {
-  dir.create(destination_directory, recursive = TRUE, showWarnings = FALSE)
+refresh_data_files <- function() {
   
-  data <- data %>%
-    mutate(YearMonth = format(RAISETIME, "%Y_%m"),
-           RAISETIME = as.POSIXct(RAISETIME, tz = "UTC", origin = "1970-01-01")) %>%
-    mutate(across(where(is.character), ~ gsub("\r|\n", " ", iconv(.x, to = "UTF-8")))) %>%
-    mutate(across(where(is.character), ~ gsub("'", "''", .x))) %>%
-    mutate(across(where(is.character), ~ gsub(";", ",", .x)))
+  # Configuration Setup
+  start_date <- as.POSIXct("2020-01-01 00:00:00", tz = "UTC")
+  source_files_directory <- "../../../../Optic Alarms 2023-2024/New"
+  destination_directory <- "home/shiny-app/Data/CSV"
+  processed_files_path <- "IMPORTED_FILES.txt"
+  column_types <- rep("text", 36)
   
+  # Read already processed files
+  processed_files <- if (file.exists(processed_files_path)) readLines(processed_files_path) else character()
   
-  monthly_data <- split(data, data$YearMonth)
+  # Function to sanitize column names
+  sanitize_column_names <- function(df) {
+    names(df) <- gsub("[[:space:][:punct:]]", "", names(df))
+    df
+  }
   
-  purrr::walk(names(monthly_data), function(name) {
-    df_to_write <- monthly_data[[name]][, !names(monthly_data[[name]]) %in% "YearMonth", drop = FALSE]
-    filename <- sprintf("%s/Optic_%s.csv", destination_directory, name)
+  # Function to read and clean Excel files
+  read_and_clean_excel <- function(file_path) {
+    data <- read_excel(file_path, col_types = column_types)
+    sanitize_column_names(data)
+  }
+  
+  # Function to convert all columns to character type
+  convert_to_character <- function(df) {
+    df[] <- lapply(df, as.character)
+    df
+  }
+  
+  # Function to export data to monthly CSV
+  export_monthly_csv <- function(data) {
+    dir.create(destination_directory, recursive = TRUE, showWarnings = FALSE)
     
-    if (file.exists(filename)) {
-      existing_data <- tryCatch(read.csv(filename, stringsAsFactors = FALSE),
-                                error = function(e) {
-                                  warning("Failed to read existing file: ", e$message)
-                                  NULL
-                                })
-      if (!is.null(existing_data)) {
-        # Prepare for rbind by ensuring matching data types and columns
-        tryCatch({
-          existing_data$RAISETIME <- as.POSIXct(existing_data$RAISETIME, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-          all_columns <- union(names(df_to_write), names(existing_data))
-          existing_data[setdiff(all_columns, names(existing_data))] <- NA
-          df_to_write[setdiff(all_columns, names(df_to_write))] <- NA
-          
-          existing_data <- existing_data[all_columns]
-          df_to_write <- df_to_write[all_columns]
-          
-          combined_data <- rbind(existing_data, df_to_write)
-          write.csv(combined_data, filename, row.names = FALSE, quote = TRUE)
-        }, error = function(e) {
-          warning("Failed to process and write data for ", name, ": ", e$message)
-        })
+    data <- data %>%
+      mutate(YearMonth = format(as.POSIXct(RAISETIME, format = "%d/%m/%Y %H:%M:%S", tz = "UTC"), "%Y_%m")) %>%
+      split(.$YearMonth)
+    
+    walk(names(data), function(month) {
+      filename <- file.path(destination_directory, paste0("Optic_", month, ".csv"))
+      
+      if (file.exists(filename)) {
+        existing_data <- read.csv(filename, stringsAsFactors = FALSE)
+        existing_data <- convert_to_character(existing_data)
+        data[[month]] <- bind_rows(existing_data, data[[month]])
       }
-    } else {
-      tryCatch({
-        # Format dates before the initial write
-        df_to_write$RAISETIME <- format(df_to_write$RAISETIME, "%Y-%m-%d %H:%M:%S", tz = "UTC")
-        write.csv(df_to_write, filename, row.names = FALSE, quote = TRUE)
-      }, error = function(e) {
-        warning("Failed to write new file ", filename, ": ", e$message)
-      })
-    }
-    
-  })
-}
-
-###################
-#### IMPORTING ####
-###################
-
-data_files <- list.files(path = source_files_directory, 
-                         pattern = "Optic_202[0-9]_[0-9]{2}_[0-9]{2}.xlsx", 
-                         full.names = TRUE, 
-                         recursive = TRUE)
-
-new_files <- setdiff(data_files, paste0(source_files_directory, "/", processed_files))
-
-if (length(new_files) > 0) {
-  print("New files to be processed:")
-  print(basename(new_files))
-} else {
-  print("No new files to process.")
-}
-
-###################
-#### CLEANING AND EXPORTING #####
-###################
-
-data_list <- lapply(new_files, function(file) {
-  tryCatch(read_excel(file), error = function(e) {
-    warning("Failed to read file ", file, ": ", e$message)
-    NULL  # Return NULL if there's an error reading the file
-  })
-})
-
-data <- if (length(data_list) > 0) do.call(rbind, data_list) else NULL
-
-if (!is.null(data)) {
+      
+      write.csv(data[[month]], filename, row.names = FALSE)
+    })
+  }
+  
+  # Get new files to process
+  data_files <- list.files(path = source_files_directory, pattern = "Optic_202[0-9]_[0-9]{2}_[0-9]{2}.xlsx", full.names = TRUE)
+  new_files <- setdiff(basename(data_files), processed_files)
+  
+  if (length(new_files) == 0) {
+    message("No new files to process.")
+    return()
+  }
+  
+  message("New files to process: ", paste(new_files, collapse = ", "))
+  
+  # Read and combine new data files
+  data_list <- map(file.path(source_files_directory, new_files), read_and_clean_excel)
+  data_list <- map(data_list, convert_to_character)  # Ensure all data is character type
+  
+  # Print data summary for debugging
+  print("Data summary before binding rows:")
+  print(lapply(data_list, summary))
+  
+  data <- bind_rows(data_list)
+  
+  # Print combined data summary for debugging
+  print("Combined data summary:")
+  print(summary(data))
+  
+  # Convert RAISETIME to POSIXct for filtering
   data <- data %>%
-    mutate(RAISETIME = tryCatch(dmy_hms(RAISETIME), error = function(e) {
-      warning("Date conversion error in RAISETIME: ", e$message)
-      NA
-    }),
-    FIRSTOCCURRENCE = tryCatch(dmy_hms(FIRSTOCCURRENCE), error = function(e) {
-      warning("Date conversion error in FIRSTOCCURRENCE: ", e$message)
-      NA
-    })) %>%
-    arrange(RAISETIME) %>%
-    filter(RAISETIME >= start_date & RAISETIME <= Sys.Date())
+    mutate(RAISETIME = as.POSIXct(RAISETIME, format = "%d/%m/%Y %H:%M:%S", tz = "UTC")) %>%
+    filter(RAISETIME >= start_date, RAISETIME <= Sys.time())
+  
+  # Print filtered data summary for debugging
+  print("Filtered data summary:")
+  print(summary(data))
+  
+  # Revert RAISETIME to text for export
+  data <- data %>%
+    mutate(RAISETIME = format(RAISETIME, "%d/%m/%Y %H:%M:%S"))
   
   if (nrow(data) > 0) {
     export_monthly_csv(data)
+    message("Data successfully written to CSV files.")
+  } else {
+    message("No data to write to CSV files.")
   }
-}
-
-# Append new files to the list of processed files and update the file
-if (length(new_files) > 0) {
+  
+  # Update processed files list
   con <- file(processed_files_path, open = "a")
   tryCatch({
-    writeLines(basename(new_files), con)  # Write only the base names
-  }, error = function(e) {
-    warning("Failed to write processed file names to ", processed_files_path, ": ", e$message)
+    writeLines(new_files, con)
   }, finally = {
-    close(con)  # Ensure the file connection is always closed
+    close(con)
   })
+  message("Processed files list updated.")
 }
+
+refresh_data_files()

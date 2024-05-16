@@ -2,8 +2,8 @@ refresh_data_files <- function() {
   
   # Configuration Setup
   start_date <- as.POSIXct("2020-01-01 00:00:00", tz = "UTC")
-  source_files_directory <- "../../../../Optic Alarms 2023-2024/New"
-  destination_directory <- "home/shiny-app/Data/CSV"
+  source_files_directory <- "/home/shiny-app/External/CSV/Data"
+  destination_directory <- "/home/shiny-app/Data/CSV"
   processed_files_path <- "IMPORTED_FILES.txt"
   exported_files_path <- "EXPORTED_FILES.txt"
   column_types <- rep("text", 36)

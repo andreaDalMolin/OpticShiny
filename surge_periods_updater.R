@@ -1,15 +1,43 @@
-source("OpticDataCleaner.R")
+# Set the working directory to ensure relative paths are correct
+setwd("/home/shiny-app")
 
-##########################
-###### LOADING DATA ######
-##########################
+# Source necessary files with absolute paths
+source("/home/shiny-app/global.R")
+source("/home/shiny-app/OpticDataCleaner.R")
 
-load_data <- function() {
+# Your function definition and execution
+calculate_agent_overlap_statistics <- function(data, start_datetime, end_datetime, customThreshold) {
+  agents <- unique(data$AGENT)
   
+  total_agents <- length(agents)
+  
+  # Initialize an empty list to store surge periods for each agent
+  surge_periods_list <- list()
+  
+  # Calculate surge periods for each agent
+  for (i in seq_along(agents)) {
+    cat(sprintf("Calculating surge periods for agent %d/%d...\n", i, total_agents))
+    # Assuming calculate_surge_periods can handle one agent at a time
+    agent_surge_periods <- calculate_surge_periods(data, start_datetime, end_datetime, customThreshold, agents[i])
+    surge_periods_list[[i]] <- agent_surge_periods
+    cat(sprintf("Completed agent %d/%d.\n", i, total_agents))
+  }
+  
+  # Combine all surge periods into one dataframe
+  surge_periods <- do.call(rbind, surge_periods_list)
+  
+  # Modify the Filter column and format the datetime columns
+  surge_periods$Start <- format(as.POSIXct(surge_periods$Start), "%d/%m/%Y %H:%M:%S")
+  surge_periods$End <- format(as.POSIXct(surge_periods$End), "%d/%m/%Y %H:%M:%S")
+  
+  write.csv(surge_periods, "surge_periods.csv", row.names = FALSE, quote = TRUE)
+}
+
+# Load the data and run the function
+load_data <- function() {
   refresh_data_files()
   
   # List all files in the directory that match the naming pattern "Optic_202x_[month_number].csv"
-  # ADD A SLASH AT THE START OF THE PATH TO RUN IN DOCKER
   data_files <- list.files(path = "/home/shiny-app/Data/CSV", pattern = "Optic_202[0-9]_[0-9]{2}.csv", full.names = TRUE, recursive = TRUE)
   
   # Load the data from CSV files
@@ -18,10 +46,7 @@ load_data <- function() {
   # Combine all data frames into one data frame
   data <- do.call(rbind, data_list)
   
-  ##########################
-  ##### PREPPING DATA ######
-  ##########################
-  
+  # Prepping data
   data$RAISETIME <- dmy_hms(data$RAISETIME)
   data$DATE <- as.Date(data$RAISETIME)
   data$TIME <- format(data$RAISETIME, "%H:%M:%S")
@@ -37,7 +62,7 @@ load_data <- function() {
   
   # Step 2: Filter rows based on RAISETIME
   start_date <- dmy_hms("01/01/2020 00:00:00")
-  end_date <- Sys.Date() # TODO change this to current date
+  end_date <- Sys.Date()
   data <- data %>%
     filter(RAISETIME >= start_date & RAISETIME <= end_date)
   
@@ -58,5 +83,9 @@ load_data <- function() {
     })
   }
   
-  data
+  # Call calculate_agent_overlap_statistics function
+  calculate_agent_overlap_statistics(data, "2020-01-01 00:00:00", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), 1.5)
 }
+
+# Execute the data load and calculation
+load_data()

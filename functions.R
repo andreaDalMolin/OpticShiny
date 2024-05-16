@@ -298,9 +298,7 @@ merge_heatmaps <- function(data_frames, is_cumulative) {
       scale_fill_gradientn(colors = c("#FFFFFF00", "lightblue", "darkblue"),
                            values = scales::rescale(c(0, 1, max(merged_data$Count, na.rm = TRUE))),
                            na.value = "#FFFFFF00") +
-      labs(title = sprintf("Merged - Alarms from %s to %s - Number of Alarms by Hour and Day",
-                           format(start_date, "%d/%m/%Y"),
-                           format(end_date, "%d/%m/%Y")),
+      labs(title = sprintf("Merged - Number of Alarms by Hour and Day"),
            x = "Hour of the Day",
            y = "Date",
            fill = "Number of Events") +
@@ -689,7 +687,11 @@ calculate_agent_overlap_statistics <- function(data, start_datetime, end_datetim
   # Combine all surge periods into one dataframe
   surge_periods <- do.call(rbind, surge_periods_list)
   
-  write.csv(surge_periods, "surge_periods.csv", row.names = FALSE)
+  # Modify the Filter column and format the datetime columns
+  surge_periods$Start <- format(as.POSIXct(surge_periods$Start), "%d/%m/%Y %H:%M:%S")
+  surge_periods$End <- format(as.POSIXct(surge_periods$End), "%d/%m/%Y %H:%M:%S")
+  
+  write.csv(surge_periods, "surge_periods.csv", row.names = FALSE, quote = TRUE)
 }
 
 #####

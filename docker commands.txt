@@ -1,0 +1,3 @@
+docker build -t optic-alarm-dashboard-april .
+
+docker run -d -p 8180:8180 --name optic-alarm-dashboard-april -v OpticData:/home/shiny-app/External/CSV/ optic-alarm-dashboard-april

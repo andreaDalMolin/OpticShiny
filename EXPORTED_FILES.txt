@@ -2,7 +2,10 @@ Optic_2021_06.csv
 Optic_2021_11.csv
 Optic_2022_02.csv
 Optic_2022_03.csv
+Optic_2022_04.csv
 Optic_2022_07.csv
+Optic_2022_08.csv
+Optic_2022_11.csv
 Optic_2022_12.csv
 Optic_2023_01.csv
 Optic_2023_02.csv
@@ -18,11 +21,6 @@ Optic_2023_11.csv
 Optic_2023_12.csv
 Optic_2024_01.csv
 Optic_2024_02.csv
-Optic_2020_11.csv
-Optic_2022_05.csv
 Optic_2024_03.csv
-Optic_2022_04.csv
-Optic_2022_08.csv
-Optic_2022_11.csv
 Optic_2024_04.csv
 Optic_2024_05.csv

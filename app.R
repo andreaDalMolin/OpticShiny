@@ -355,7 +355,7 @@ server <- function(input, output, session) {
   
   # Reactive polling to refresh data
   data <- reactive({
-    invalidateLater(60000, session)  # Adjust time as needed
+    invalidateLater(86400000, session)  # Refresh every 24h
     print("Refreshing data .............")
     load_data()  # Call the function to load data
   })
@@ -374,6 +374,11 @@ server <- function(input, output, session) {
   # Dynamic UI for select_menu6
   output$menu6Selector <- renderUI({
     selectizeInput("select_menu6", label = "Agent(s)", choices = c("All agents by default" = "", agent_choices()), multiple = TRUE)
+  })
+  
+  # Dynamic UI for agents_menu3
+  output$menu4Selector <- renderUI({
+    selectizeInput("agents_menu4", label = "Agent(s)", choices = agent_choices(), multiple = TRUE)
   })
   
   # Dynamic UI for agents_menu3
@@ -796,7 +801,12 @@ server <- function(input, output, session) {
       agent_name <- input$select_menu6[1]  # Use the first selected agent
       overlaps_data <- list()
       
-      overlaps_data$raw_overlaps <- analyze_overlaps(agent_name)
+      raw_overlaps <- analyze_overlaps(agent_name)
+      if (is.null(raw_overlaps)) {
+        raw_overlaps <- data.frame(Start1 = as.POSIXct(character()), End1 = as.POSIXct(character()))  # Create an empty dataframe with correct columns
+      }
+      
+      overlaps_data$raw_overlaps <- raw_overlaps
       overlaps_data$summarized_data <- overlaps_data$raw_overlaps %>%
         select(Start1, End1) %>%
         distinct() %>%
@@ -804,7 +814,7 @@ server <- function(input, output, session) {
       
       return(overlaps_data)
     } else {
-      return(list(raw_overlaps = data.frame(), summarized_data = data.frame()))  # Return structured empty data
+      return(list(raw_overlaps = data.frame(Start1 = as.POSIXct(character()), End1 = as.POSIXct(character())), summarized_data = data.frame(Start1 = as.POSIXct(character()), End1 = as.POSIXct(character()))))  # Return structured empty data
     }
   })
   
@@ -817,12 +827,13 @@ server <- function(input, output, session) {
       select(`Surge start`, `Surge end`)
     
     datatable(formatted_summarized_data, selection = 'single', rownames = FALSE, options = list(
-      dom = 't', # This option is to remove the datatable's controls and only show the table
+      dom = 't',  # This option is to remove the datatable's controls and only show the table
       paging = FALSE,
       searching = TRUE,
       info = FALSE
     ))
   }, server = FALSE)
+  
   
   # Details panel UI based on selection in the main table
   output$detailsPanel <- renderUI({
